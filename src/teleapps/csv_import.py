@@ -1,0 +1,272 @@
+"""CSV import/export for conversation and participant metadata."""
+
+import csv
+import json
+import io
+from dataclasses import dataclass
+
+from sqlalchemy.orm import Session
+from sqlalchemy import select
+
+from .models import Conversation, ConversationMetadata, Participant
+
+
+@dataclass
+class ImportResult:
+    """Result of a CSV import operation."""
+    imported_count: int = 0
+    skipped_count: int = 0
+    errors: list[str] = None
+    
+    def __post_init__(self):
+        if self.errors is None:
+            self.errors = []
+
+
+# Reserved columns that map to specific fields
+CONVERSATION_RESERVED_COLUMNS = {"chatid", "chatname", "priority", "is_vip", "notes", "muted"}
+PARTICIPANT_RESERVED_COLUMNS = {"userid", "username", "displayname", "notes"}
+
+
+def export_conversations_template(db_session: Session) -> str:
+    """Export a CSV template with all conversations.
+    
+    Format: chatid,chatname,[add your columns here]
+    
+    Returns CSV string.
+    """
+    output = io.StringIO()
+    writer = csv.writer(output)
+    
+    # Header with example custom columns
+    writer.writerow(["chatid", "chatname", "priority", "is_vip", "notes", "[add_your_columns]"])
+    
+    # Get all conversations
+    conversations = db_session.execute(
+        select(Conversation, ConversationMetadata)
+        .outerjoin(ConversationMetadata)
+        .order_by(Conversation.display_name)
+    ).all()
+    
+    for conv, meta in conversations:
+        writer.writerow([
+            conv.tg_id,
+            conv.display_name,
+            meta.priority if meta else "medium",
+            "true" if (meta and meta.is_vip) else "false",
+            meta.notes if meta else "",
+            "",  # Placeholder for custom columns
+        ])
+    
+    return output.getvalue()
+
+
+def import_conversations_metadata(db_session: Session, csv_content: str) -> ImportResult:
+    """Import conversation metadata from CSV.
+    
+    The CSV must have at least 'chatid' column.
+    Other columns:
+    - chatname (ignored, just for reference)
+    - priority (high/medium/low)
+    - is_vip (true/false)
+    - notes (text)
+    - Any other columns stored in custom_fields_json
+    
+    Returns ImportResult.
+    """
+    result = ImportResult()
+    
+    try:
+        reader = csv.DictReader(io.StringIO(csv_content))
+    except Exception as e:
+        result.errors.append(f"Failed to parse CSV: {e}")
+        return result
+    
+    if "chatid" not in (reader.fieldnames or []):
+        result.errors.append("CSV must have 'chatid' column")
+        return result
+    
+    for row_num, row in enumerate(reader, start=2):  # Start at 2 (header is 1)
+        try:
+            chat_id_str = row.get("chatid", "").strip()
+            if not chat_id_str:
+                result.skipped_count += 1
+                continue
+            
+            try:
+                chat_id = int(chat_id_str)
+            except ValueError:
+                result.errors.append(f"Row {row_num}: Invalid chatid '{chat_id_str}'")
+                continue
+            
+            # Find conversation by tg_id
+            conversation = db_session.execute(
+                select(Conversation).where(Conversation.tg_id == chat_id)
+            ).scalar_one_or_none()
+            
+            if not conversation:
+                result.errors.append(f"Row {row_num}: No conversation found with chatid {chat_id}")
+                continue
+            
+            # Get or create metadata
+            meta = db_session.execute(
+                select(ConversationMetadata).where(
+                    ConversationMetadata.conversation_uuid == conversation.conversation_uuid
+                )
+            ).scalar_one_or_none()
+            
+            if not meta:
+                meta = ConversationMetadata(
+                    conversation_uuid=conversation.conversation_uuid
+                )
+                db_session.add(meta)
+            
+            # Update reserved fields
+            if "priority" in row and row["priority"].strip():
+                priority = row["priority"].strip().lower()
+                if priority in ("high", "medium", "low"):
+                    meta.priority = priority
+            
+            if "is_vip" in row and row["is_vip"].strip():
+                meta.is_vip = row["is_vip"].strip().lower() in ("true", "1", "yes")
+            
+            if "notes" in row:
+                meta.notes = row["notes"].strip() or None
+            
+            if "muted" in row and row["muted"].strip():
+                meta.muted_in_teleapps = row["muted"].strip().lower() in ("true", "1", "yes")
+            
+            # Collect custom fields (non-reserved columns)
+            custom_fields = {}
+            for key, value in row.items():
+                key_lower = key.lower().strip()
+                if key_lower not in CONVERSATION_RESERVED_COLUMNS and value and value.strip():
+                    custom_fields[key] = value.strip()
+            
+            if custom_fields:
+                # Merge with existing custom fields
+                existing = {}
+                if meta.custom_fields_json:
+                    try:
+                        existing = json.loads(meta.custom_fields_json)
+                    except json.JSONDecodeError:
+                        pass
+                existing.update(custom_fields)
+                meta.custom_fields_json = json.dumps(existing)
+            
+            result.imported_count += 1
+        
+        except Exception as e:
+            result.errors.append(f"Row {row_num}: {str(e)}")
+    
+    db_session.commit()
+    return result
+
+
+def export_participants_template(db_session: Session) -> str:
+    """Export a CSV template with all participants.
+    
+    Format: userid,username,displayname,[add your columns here]
+    
+    Returns CSV string.
+    """
+    output = io.StringIO()
+    writer = csv.writer(output)
+    
+    # Header
+    writer.writerow(["userid", "username", "displayname", "notes", "[add_your_columns]"])
+    
+    # Get all participants
+    participants = db_session.execute(
+        select(Participant).order_by(Participant.display_name)
+    ).scalars().all()
+    
+    for p in participants:
+        writer.writerow([
+            p.tg_user_id or "",
+            p.username or "",
+            p.display_name,
+            "",  # notes placeholder
+            "",  # custom columns placeholder
+        ])
+    
+    return output.getvalue()
+
+
+def import_participants_metadata(db_session: Session, csv_content: str) -> ImportResult:
+    """Import participant metadata from CSV.
+    
+    The CSV must have 'userid' or 'username' column.
+    Other columns stored in custom_fields_json.
+    
+    Returns ImportResult.
+    """
+    result = ImportResult()
+    
+    try:
+        reader = csv.DictReader(io.StringIO(csv_content))
+    except Exception as e:
+        result.errors.append(f"Failed to parse CSV: {e}")
+        return result
+    
+    fieldnames = reader.fieldnames or []
+    has_userid = "userid" in fieldnames
+    has_username = "username" in fieldnames
+    
+    if not has_userid and not has_username:
+        result.errors.append("CSV must have 'userid' or 'username' column")
+        return result
+    
+    for row_num, row in enumerate(reader, start=2):
+        try:
+            # Find participant by user_id or username
+            participant = None
+            
+            if has_userid and row.get("userid", "").strip():
+                try:
+                    user_id = int(row["userid"].strip())
+                    participant = db_session.execute(
+                        select(Participant).where(Participant.tg_user_id == user_id)
+                    ).scalar_one_or_none()
+                except ValueError:
+                    pass
+            
+            if not participant and has_username and row.get("username", "").strip():
+                username = row["username"].strip().lstrip("@")
+                participant = db_session.execute(
+                    select(Participant).where(Participant.username == username)
+                ).scalar_one_or_none()
+            
+            if not participant:
+                result.skipped_count += 1
+                continue
+            
+            # Update notes if present
+            if "notes" in row and row["notes"].strip():
+                # Store notes in custom_fields_json since Participant doesn't have notes column
+                pass
+            
+            # Collect custom fields
+            custom_fields = {}
+            for key, value in row.items():
+                key_lower = key.lower().strip()
+                if key_lower not in PARTICIPANT_RESERVED_COLUMNS and value and value.strip():
+                    custom_fields[key] = value.strip()
+            
+            if custom_fields:
+                existing = {}
+                if participant.custom_fields_json:
+                    try:
+                        existing = json.loads(participant.custom_fields_json)
+                    except json.JSONDecodeError:
+                        pass
+                existing.update(custom_fields)
+                participant.custom_fields_json = json.dumps(existing)
+            
+            result.imported_count += 1
+        
+        except Exception as e:
+            result.errors.append(f"Row {row_num}: {str(e)}")
+    
+    db_session.commit()
+    return result

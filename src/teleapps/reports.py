@@ -1,0 +1,281 @@
+"""Report generation using LLM."""
+
+import json
+from datetime import datetime
+from dataclasses import dataclass, asdict
+from typing import Any
+
+from sqlalchemy.orm import Session
+from sqlalchemy import select
+
+from .models import Conversation, ConversationMetadata, Message, Report, UserState
+from .telegram_client import TelegramClientWrapper
+from .llm import LLMClient, ConversationContext, AnalysisResult
+from .sync import sync_messages_for_conversation
+from .config import get_config
+
+
+@dataclass
+class ReportSection:
+    """A section of the report (reply_now, review, low_priority)."""
+    items: list[dict]
+
+
+@dataclass 
+class ReportData:
+    """Complete report data structure."""
+    generated_at: str
+    covers_since: str
+    sections: dict[str, list[dict]]
+    stats: dict[str, int]
+
+
+async def generate_report(
+    tg_client: TelegramClientWrapper,
+    db_session: Session,
+    llm_client: LLMClient,
+    since: datetime | None = None,
+    on_progress: callable = None,
+) -> Report:
+    """Generate a prioritized report of conversations.
+    
+    Args:
+        tg_client: Connected Telegram client
+        db_session: Database session
+        llm_client: LLM client for analysis
+        since: Only include conversations with activity since this date
+               If None, uses caught_up_at from user_state
+        on_progress: Optional callback(current, total, message)
+    
+    Returns:
+        Report model instance
+    """
+    # Get "since" date
+    if since is None:
+        since = get_caught_up_date(db_session)
+    
+    if since is None:
+        # Default to 7 days ago if never set
+        since = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
+        from datetime import timedelta
+        since = since - timedelta(days=7)
+    
+    # Find conversations with unread messages or activity since date
+    query = (
+        select(Conversation, ConversationMetadata)
+        .outerjoin(ConversationMetadata)
+        .where(
+            (Conversation.unread_count > 0) | 
+            (Conversation.last_message_date >= since)
+        )
+        .order_by(Conversation.last_message_date.desc())
+    )
+    
+    results = db_session.execute(query).all()
+    
+    if not results:
+        # No conversations to analyze
+        report_data = ReportData(
+            generated_at=datetime.utcnow().isoformat(),
+            covers_since=since.isoformat(),
+            sections={"reply_now": [], "review": [], "low_priority": []},
+            stats={"total_conversations": 0, "total_unread": 0},
+        )
+        
+        report = Report(
+            covers_since=since,
+            report_json=json.dumps(asdict(report_data)),
+        )
+        db_session.add(report)
+        db_session.commit()
+        return report
+    
+    # Build contexts for LLM
+    contexts = []
+    total = len(results)
+    
+    for i, (conv, meta) in enumerate(results):
+        if on_progress:
+            on_progress(i + 1, total, f"Fetching messages: {conv.display_name}")
+        
+        # Sync recent messages if needed
+        config = get_config()
+        await sync_messages_for_conversation(tg_client, db_session, conv, limit=config.message_cache_limit)
+        
+        # Get cached messages
+        messages = db_session.execute(
+            select(Message)
+            .where(Message.conversation_uuid == conv.conversation_uuid)
+            .order_by(Message.date.desc())
+            .limit(20)
+        ).scalars().all()
+        
+        message_data = [
+            {
+                "sender": msg.sender_name or "Unknown",
+                "text": msg.text[:500] if msg.text else "",
+                "date": msg.date.isoformat() if msg.date else "",
+            }
+            for msg in messages
+        ]
+        
+        # Parse custom fields
+        custom_fields = {}
+        if meta and meta.custom_fields_json:
+            try:
+                custom_fields = json.loads(meta.custom_fields_json)
+            except json.JSONDecodeError:
+                pass
+        
+        contexts.append(ConversationContext(
+            conversation_id=conv.conversation_uuid,
+            tg_type=conv.tg_type,
+            display_name=conv.display_name,
+            username=conv.username,
+            priority=meta.priority if meta else "medium",
+            is_vip=meta.is_vip if meta else False,
+            custom_fields=custom_fields,
+            messages=message_data,
+        ))
+    
+    # Call LLM in batches
+    if on_progress:
+        on_progress(total, total, "Analyzing with LLM...")
+    
+    all_results: list[AnalysisResult] = []
+    batch_size = 10
+    
+    for i in range(0, len(contexts), batch_size):
+        batch = contexts[i:i + batch_size]
+        batch_results = await llm_client.analyze_batch(batch)
+        all_results.extend(batch_results)
+    
+    # Organize into sections
+    reply_now = []
+    review = []
+    low_priority = []
+    total_unread = 0
+    
+    # Build lookup for conversation data
+    conv_lookup = {conv.conversation_uuid: (conv, meta) for conv, meta in results}
+    
+    for result in all_results:
+        conv, meta = conv_lookup.get(result.conversation_id, (None, None))
+        if not conv:
+            continue
+        
+        total_unread += conv.unread_count
+        
+        item = {
+            "conversation_uuid": result.conversation_id,
+            "display_name": conv.display_name,
+            "username": conv.username,
+            "tg_type": conv.tg_type,
+            "unread_count": conv.unread_count,
+            "urgency_score": result.urgency_score,
+            "summary": result.summary,
+            "reasoning": result.reasoning,
+            "recommended_action": result.recommended_action,
+        }
+        
+        if result.urgency_score >= 80:
+            reply_now.append(item)
+        elif result.urgency_score >= 40:
+            review.append(item)
+        else:
+            low_priority.append(item)
+    
+    # Sort each section by urgency
+    reply_now.sort(key=lambda x: x["urgency_score"], reverse=True)
+    review.sort(key=lambda x: x["urgency_score"], reverse=True)
+    low_priority.sort(key=lambda x: x["urgency_score"], reverse=True)
+    
+    # Build report
+    report_data = ReportData(
+        generated_at=datetime.utcnow().isoformat(),
+        covers_since=since.isoformat(),
+        sections={
+            "reply_now": reply_now,
+            "review": review,
+            "low_priority": low_priority,
+        },
+        stats={
+            "total_conversations": len(results),
+            "total_unread": total_unread,
+        },
+    )
+    
+    report = Report(
+        covers_since=since,
+        report_json=json.dumps(asdict(report_data)),
+    )
+    db_session.add(report)
+    
+    # Update last_report_at
+    set_user_state(db_session, "last_report_at", datetime.utcnow().isoformat())
+    
+    db_session.commit()
+    return report
+
+
+def get_caught_up_date(db_session: Session) -> datetime | None:
+    """Get the user's caught_up_at date."""
+    state = db_session.execute(
+        select(UserState).where(UserState.key == "caught_up_at")
+    ).scalar_one_or_none()
+    
+    if state and state.value:
+        return datetime.fromisoformat(state.value)
+    return None
+
+
+def set_caught_up_date(db_session: Session, date: datetime | None = None) -> None:
+    """Set the caught_up_at date (defaults to now)."""
+    if date is None:
+        date = datetime.utcnow()
+    
+    set_user_state(db_session, "caught_up_at", date.isoformat())
+    db_session.commit()
+
+
+def set_user_state(db_session: Session, key: str, value: str) -> None:
+    """Set a user state value."""
+    state = db_session.execute(
+        select(UserState).where(UserState.key == key)
+    ).scalar_one_or_none()
+    
+    if state:
+        state.value = value
+    else:
+        state = UserState(key=key, value=value)
+        db_session.add(state)
+
+
+def get_user_state(db_session: Session, key: str) -> str | None:
+    """Get a user state value."""
+    state = db_session.execute(
+        select(UserState).where(UserState.key == key)
+    ).scalar_one_or_none()
+    
+    return state.value if state else None
+
+
+def get_last_report(db_session: Session) -> Report | None:
+    """Get the most recent report."""
+    return db_session.execute(
+        select(Report).order_by(Report.created_at.desc()).limit(1)
+    ).scalar_one_or_none()
+
+
+def get_report_by_id(db_session: Session, report_id: int) -> Report | None:
+    """Get a report by ID."""
+    return db_session.execute(
+        select(Report).where(Report.report_id == report_id)
+    ).scalar_one_or_none()
+
+
+def list_reports(db_session: Session, limit: int = 20) -> list[Report]:
+    """List recent reports."""
+    return list(db_session.execute(
+        select(Report).order_by(Report.created_at.desc()).limit(limit)
+    ).scalars().all())
