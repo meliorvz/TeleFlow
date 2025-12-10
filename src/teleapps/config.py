@@ -33,6 +33,9 @@ class Config:
     # Message cache limit per conversation
     message_cache_limit: int = 50
     
+    # LLM conversation age cutoff (days)
+    llm_conversation_max_age_days: int = 90
+    
     # Web server
     web_host: str = "127.0.0.1"
     web_port: int = 8080
@@ -106,6 +109,7 @@ def load_config(env_file: Path | None = None) -> Config:
         llm_system_prompt=os.getenv("LLM_SYSTEM_PROMPT"),
         report_cadence=os.getenv("REPORT_CADENCE", "manual"),
         message_cache_limit=get_int("MESSAGE_CACHE_LIMIT", 50),
+        llm_conversation_max_age_days=get_int("LLM_CONVERSATION_MAX_AGE_DAYS", 90),
         web_host=os.getenv("WEB_HOST", "127.0.0.1"),
         web_port=get_int("WEB_PORT", 8080),
     )

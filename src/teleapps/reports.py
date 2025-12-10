@@ -60,13 +60,23 @@ async def generate_report(
         from datetime import timedelta
         since = since - timedelta(days=7)
     
+    # Calculate age cutoff (conversations older than this are excluded)
+    from datetime import timedelta
+    config = get_config()
+    age_cutoff = datetime.utcnow() - timedelta(days=config.llm_conversation_max_age_days)
+    
     # Find conversations with unread messages or activity since date
+    # BUT exclude conversations older than the age cutoff
     query = (
         select(Conversation, ConversationMetadata)
         .outerjoin(ConversationMetadata)
         .where(
             (Conversation.unread_count > 0) | 
             (Conversation.last_message_date >= since)
+        )
+        .where(
+            # Age cutoff - exclude stale conversations
+            Conversation.last_message_date >= age_cutoff
         )
         .order_by(Conversation.last_message_date.desc())
     )
