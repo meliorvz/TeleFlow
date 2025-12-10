@@ -18,6 +18,7 @@ import {
 } from 'lucide-react'
 import { getConversations, bulkSendPreview, bulkSendExecute } from '@/lib/api'
 import type { Conversation, BulkSendPreview } from '@/lib/types'
+import { PageLayout } from '@/components/PageLayout'
 
 type Step = 'select' | 'compose' | 'confirm'
 
@@ -112,7 +113,7 @@ export function BulkSend() {
     }
 
     return (
-        <div className="p-6 max-w-4xl mx-auto">
+        <PageLayout>
             {/* Progress Steps */}
             <div className="flex items-center justify-center mb-8">
                 <div className={`flex items-center gap-2 ${step === 'select' ? 'text-primary' : 'text-muted-foreground'}`}>
@@ -183,8 +184,8 @@ export function BulkSend() {
                                             key={conv.uuid}
                                             onClick={() => handleToggle(conv.uuid)}
                                             className={`w-full flex items-center justify-between p-2 rounded transition-colors ${selected.has(conv.uuid)
-                                                    ? 'bg-primary text-primary-foreground'
-                                                    : 'hover:bg-muted'
+                                                ? 'bg-primary text-primary-foreground'
+                                                : 'hover:bg-muted'
                                                 }`}
                                         >
                                             <span className="truncate">{conv.display_name}</span>
@@ -339,6 +340,6 @@ export function BulkSend() {
                     </CardContent>
                 </Card>
             )}
-        </div>
+        </PageLayout>
     )
 }

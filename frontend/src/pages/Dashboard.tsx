@@ -8,6 +8,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { FileText, AlertCircle, Clock, CheckCircle, Loader2 } from 'lucide-react'
 import { getLatestReport, generateReport } from '@/lib/api'
 import type { Status, Report, ReportItem } from '@/lib/types'
+import { PageLayout } from '@/components/PageLayout'
 
 interface DashboardProps {
     status: Status | null
@@ -55,7 +56,7 @@ export function Dashboard({ status }: DashboardProps) {
     }
 
     return (
-        <div className="p-6 space-y-6">
+        <PageLayout className="space-y-6">
             {/* Stats Grid */}
             <div className="grid gap-4 md:grid-cols-4">
                 <Card>
@@ -159,7 +160,7 @@ export function Dashboard({ status }: DashboardProps) {
                     )}
                 </CardContent>
             </Card>
-        </div>
+        </PageLayout>
     )
 }
 

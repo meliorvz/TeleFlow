@@ -22,6 +22,7 @@ import {
     updateConversation
 } from '@/lib/api'
 import type { Conversation, Message } from '@/lib/types'
+import { PageLayout } from '@/components/PageLayout'
 
 export function Conversations() {
     const [conversations, setConversations] = useState<Conversation[]>([])
@@ -117,7 +118,7 @@ export function Conversations() {
     }
 
     return (
-        <div className="flex h-full flex-col">
+        <PageLayout variant="full">
             {/* Filters */}
             <div className="border-b p-4 space-y-3">
                 <div className="flex items-center gap-3">
@@ -268,6 +269,6 @@ export function Conversations() {
                     )}
                 </div>
             </ScrollArea>
-        </div>
+        </PageLayout>
     )
 }

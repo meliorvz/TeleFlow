@@ -7,6 +7,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { FileText, Calendar, Eye, Loader2 } from 'lucide-react'
 import { getReports, getReport, generateReport } from '@/lib/api'
 import type { Report } from '@/lib/types'
+import { PageLayout } from '@/components/PageLayout'
 
 export function Reports() {
     const [reports, setReports] = useState<Report[]>([])
@@ -65,7 +66,7 @@ export function Reports() {
     }
 
     return (
-        <div className="flex h-full">
+        <PageLayout variant="full">
             {/* Reports List */}
             <div className="w-80 border-r flex flex-col">
                 <div className="p-4 border-b flex items-center justify-between">
@@ -92,8 +93,8 @@ export function Reports() {
                                     key={report.id}
                                     onClick={() => handleViewReport(report.id)}
                                     className={`w-full text-left p-3 rounded-lg transition-colors ${selectedReport?.id === report.id
-                                            ? 'bg-primary text-primary-foreground'
-                                            : 'hover:bg-muted'
+                                        ? 'bg-primary text-primary-foreground'
+                                        : 'hover:bg-muted'
                                         }`}
                                 >
                                     <div className="flex items-center justify-between">
@@ -223,6 +224,6 @@ export function Reports() {
                     </div>
                 )}
             </div>
-        </div>
+        </PageLayout>
     )
 }

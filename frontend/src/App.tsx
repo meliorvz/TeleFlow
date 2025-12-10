@@ -208,7 +208,7 @@ function App() {
           </TabsList>
         </div>
 
-        <div className="flex-1 overflow-auto">
+        <div className="flex-1 overflow-hidden">
           <TabsContent value="dashboard" className="m-0 h-full">
             <Dashboard status={status} />
           </TabsContent>

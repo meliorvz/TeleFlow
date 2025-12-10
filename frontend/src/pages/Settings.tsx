@@ -22,6 +22,7 @@ import {
     uploadParticipantsCsv
 } from '@/lib/api'
 import type { Status } from '@/lib/types'
+import { PageLayout } from '@/components/PageLayout'
 
 interface SettingsPageProps {
     status: Status | null
@@ -108,7 +109,7 @@ export function SettingsPage({ status, onRefresh }: SettingsPageProps) {
     }
 
     return (
-        <div className="p-6 max-w-2xl mx-auto space-y-6">
+        <PageLayout className="space-y-6">
             {/* Connection Status */}
             <Card>
                 <CardHeader>
@@ -235,8 +236,8 @@ export function SettingsPage({ status, onRefresh }: SettingsPageProps) {
                     {/* Upload Result */}
                     {uploadResult && (
                         <div className={`p-3 rounded-lg border ${uploadResult.type === 'success'
-                                ? 'bg-green-500/10 border-green-500/30 text-green-500'
-                                : 'bg-destructive/10 border-destructive/30 text-destructive'
+                            ? 'bg-green-500/10 border-green-500/30 text-green-500'
+                            : 'bg-destructive/10 border-destructive/30 text-destructive'
                             }`}>
                             {uploadResult.result}
                         </div>
@@ -307,6 +308,6 @@ export function SettingsPage({ status, onRefresh }: SettingsPageProps) {
                     </div>
                 </CardContent>
             </Card>
-        </div>
+        </PageLayout>
     )
 }
