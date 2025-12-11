@@ -584,11 +584,12 @@ async def export_participants_by_chats(chat_uuids: str):
 
 @router.post("/reports/generate")
 async def trigger_report_generation(background_tasks: BackgroundTasks):
-    """Generate a new report."""
-    config = get_config()
+    """Generate a new report.
     
-    if not config.llm_enabled:
-        raise HTTPException(status_code=400, detail="LLM not configured")
+    Uses LLM-based analysis if configured, otherwise falls back to
+    simple rule-based prioritization (mentions, replies, VIP status).
+    """
+    config = get_config()
     
     job_manager = get_job_manager()
     job = job_manager.create_job(JobType.REPORT)
@@ -597,13 +598,22 @@ async def trigger_report_generation(background_tasks: BackgroundTasks):
         try:
             job.status = JobStatus.RUNNING
             client = await get_tg_client()
-            llm = get_llm_client()
             
             with get_session() as session:
-                report = await generate_report(
-                    client, session, llm,
-                    on_progress=lambda c, t, m: job_manager.update_progress(job.id, c, t, m)
-                )
+                if config.llm_enabled:
+                    # Use LLM-based analysis
+                    llm = get_llm_client()
+                    report = await generate_report(
+                        client, session, llm,
+                        on_progress=lambda c, t, m: job_manager.update_progress(job.id, c, t, m)
+                    )
+                else:
+                    # Use simple rule-based prioritization (privacy mode)
+                    from ..reports import generate_simple_report
+                    report = await generate_simple_report(
+                        client, session,
+                        on_progress=lambda c, t, m: job_manager.update_progress(job.id, c, t, m)
+                    )
             
             job_manager.complete_job(job.id, {"report_id": report.report_id})
         except Exception as e:

@@ -132,8 +132,8 @@ export function SetupWizard({ onComplete }: SetupWizardProps) {
                                     type="button"
                                     onClick={() => setLlmProvider('openrouter')}
                                     className={`rounded-lg border-2 p-4 text-left transition-all ${llmProvider === 'openrouter'
-                                            ? 'border-primary bg-primary/5'
-                                            : 'border-muted hover:border-muted-foreground/50'
+                                        ? 'border-primary bg-primary/5'
+                                        : 'border-muted hover:border-muted-foreground/50'
                                         }`}
                                 >
                                     <div className="flex items-center gap-2 mb-2">
@@ -153,8 +153,8 @@ export function SetupWizard({ onComplete }: SetupWizardProps) {
                                     type="button"
                                     onClick={() => setLlmProvider('venice')}
                                     className={`rounded-lg border-2 p-4 text-left transition-all ${llmProvider === 'venice'
-                                            ? 'border-primary bg-primary/5'
-                                            : 'border-muted hover:border-muted-foreground/50'
+                                        ? 'border-primary bg-primary/5'
+                                        : 'border-muted hover:border-muted-foreground/50'
                                         }`}
                                 >
                                     <div className="flex items-center gap-2 mb-2">
@@ -236,9 +236,16 @@ export function SetupWizard({ onComplete }: SetupWizardProps) {
                             )}
 
                             {!llmProvider && (
-                                <p className="text-xs text-muted-foreground">
-                                    You can skip this and add it later in Settings.
-                                </p>
+                                <div className="rounded-lg border border-dashed bg-muted/30 p-3 text-sm">
+                                    <p className="font-medium text-muted-foreground mb-1">
+                                        ✨ Skip for maximum privacy
+                                    </p>
+                                    <p className="text-xs text-muted-foreground">
+                                        Without an AI provider, no message data leaves your device.
+                                        Reports will still prioritize conversations where you're @mentioned
+                                        or replied to. You can add AI later in Settings.
+                                    </p>
+                                </div>
                             )}
                         </div>
 

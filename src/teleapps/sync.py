@@ -153,8 +153,17 @@ async def sync_messages_for_conversation(
     db_session: Session,
     conversation: Conversation,
     limit: int = 50,
+    owner_info: dict | None = None,
 ) -> int:
     """Sync recent messages for a specific conversation.
+    
+    Args:
+        tg_client: Connected Telegram client
+        db_session: Database session
+        conversation: Conversation to sync messages for
+        limit: Max number of messages to fetch
+        owner_info: Dict with inbox owner info {username, first_name, user_id}
+                    Used to detect @mentions of the owner
     
     Returns the number of new messages synced.
     """
@@ -167,6 +176,14 @@ async def sync_messages_for_conversation(
     messages = await rate_limiter.execute(
         tg_client.get_messages(entity, limit=limit)
     )
+    
+    # Build list of patterns to detect @mentions of owner
+    mention_patterns = []
+    if owner_info:
+        if owner_info.get("username"):
+            mention_patterns.append(f"@{owner_info['username'].lower()}")
+        if owner_info.get("first_name"):
+            mention_patterns.append(owner_info["first_name"].lower())
     
     new_count = 0
     
@@ -192,6 +209,20 @@ async def sync_messages_for_conversation(
             sender_id = msg.sender_id
             sender_name = tg_client.get_display_name(msg.sender)
         
+        # Get reply_to info
+        reply_to_msg_id = None
+        if msg.reply_to and hasattr(msg.reply_to, 'reply_to_msg_id'):
+            reply_to_msg_id = msg.reply_to.reply_to_msg_id
+        
+        # Detect @mentions of owner in message text
+        mentions_owner = False
+        if mention_patterns and msg.text:
+            text_lower = msg.text.lower()
+            for pattern in mention_patterns:
+                if pattern in text_lower:
+                    mentions_owner = True
+                    break
+        
         message = Message(
             conversation_uuid=conversation.conversation_uuid,
             message_id=msg.id,
@@ -200,9 +231,12 @@ async def sync_messages_for_conversation(
             sender_name=sender_name,
             text=msg.text or "",
             has_media=msg.media is not None,
+            reply_to_msg_id=reply_to_msg_id,
+            mentions_owner=mentions_owner,
         )
         db_session.add(message)
         new_count += 1
     
     db_session.commit()
     return new_count
+

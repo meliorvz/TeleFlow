@@ -67,7 +67,40 @@ def init_db(config: Config | None = None) -> bool:
     engine = get_engine(config)
     Base.metadata.create_all(engine)
     
+    # Run migrations for existing databases
+    if db_existed:
+        _run_migrations(engine)
+    
     return db_existed
+
+
+def _run_migrations(engine):
+    """Run simple migrations to add new columns if they don't exist.
+    
+    This handles upgrades for existing databases.
+    """
+    from sqlalchemy import text, inspect
+    
+    inspector = inspect(engine)
+    
+    # Check if messages table has the new columns
+    if "messages" in inspector.get_table_names():
+        columns = {col["name"] for col in inspector.get_columns("messages")}
+        
+        with engine.connect() as conn:
+            # Add reply_to_msg_id if missing
+            if "reply_to_msg_id" not in columns:
+                conn.execute(text(
+                    "ALTER TABLE messages ADD COLUMN reply_to_msg_id INTEGER"
+                ))
+                conn.commit()
+            
+            # Add mentions_owner if missing  
+            if "mentions_owner" not in columns:
+                conn.execute(text(
+                    "ALTER TABLE messages ADD COLUMN mentions_owner BOOLEAN DEFAULT 0"
+                ))
+                conn.commit()
 
 
 @contextmanager

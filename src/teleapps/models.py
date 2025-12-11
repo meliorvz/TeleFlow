@@ -119,6 +119,10 @@ class Message(Base):
     text = Column(Text, nullable=True)
     has_media = Column(Boolean, default=False)
     
+    # For simple prioritization (no LLM)
+    reply_to_msg_id = Column(Integer, nullable=True)  # ID of message being replied to
+    mentions_owner = Column(Boolean, default=False)  # Whether message @mentions inbox owner
+    
     # Relationships
     conversation = relationship("Conversation", back_populates="messages")
     
