@@ -4,17 +4,21 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Separator } from '@/components/ui/separator'
-import { ExternalLink, Check, AlertCircle, Loader2 } from 'lucide-react'
+import { ExternalLink, Check, AlertCircle, Loader2, Shield, Zap } from 'lucide-react'
 import { saveConfig } from '@/lib/api'
 
 interface SetupWizardProps {
     onComplete: () => void
 }
 
+type LLMProvider = 'openrouter' | 'venice' | null
+
 export function SetupWizard({ onComplete }: SetupWizardProps) {
     const [tgApiId, setTgApiId] = useState('')
     const [tgApiHash, setTgApiHash] = useState('')
+    const [llmProvider, setLlmProvider] = useState<LLMProvider>(null)
     const [openrouterKey, setOpenrouterKey] = useState('')
+    const [veniceKey, setVeniceKey] = useState('')
     const [saving, setSaving] = useState(false)
     const [error, setError] = useState('')
 
@@ -27,7 +31,9 @@ export function SetupWizard({ onComplete }: SetupWizardProps) {
             await saveConfig({
                 tg_api_id: tgApiId,
                 tg_api_hash: tgApiHash,
-                openrouter_api_key: openrouterKey || undefined,
+                llm_provider: llmProvider || undefined,
+                openrouter_api_key: llmProvider === 'openrouter' ? openrouterKey : undefined,
+                venice_api_key: llmProvider === 'venice' ? veniceKey : undefined,
             })
             onComplete()
         } catch (err) {
@@ -38,6 +44,10 @@ export function SetupWizard({ onComplete }: SetupWizardProps) {
     }
 
     const isTelegramValid = tgApiId.length > 0 && tgApiHash.length > 0
+    const isLlmConfigured = llmProvider && (
+        (llmProvider === 'openrouter' && openrouterKey) ||
+        (llmProvider === 'venice' && veniceKey)
+    )
 
     return (
         <div className="flex min-h-screen items-center justify-center bg-background p-4 dark">
@@ -104,44 +114,131 @@ export function SetupWizard({ onComplete }: SetupWizardProps) {
 
                         <Separator />
 
-                        {/* OpenRouter Section */}
+                        {/* LLM Provider Section */}
                         <div className="space-y-4">
                             <div className="flex items-center justify-between">
-                                <h3 className="text-lg font-semibold">LLM (OpenRouter)</h3>
+                                <h3 className="text-lg font-semibold">AI Provider</h3>
                                 <span className="text-xs text-muted-foreground">Optional</span>
                             </div>
 
-                            <div className="rounded-lg border bg-muted/50 p-4 text-sm">
-                                <p className="mb-2">OpenRouter enables AI-powered message triage. To get an API key:</p>
-                                <ol className="list-inside list-decimal space-y-1 text-muted-foreground">
-                                    <li>Go to <a href="https://openrouter.ai" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline inline-flex items-center gap-1">
-                                        openrouter.ai <ExternalLink className="h-3 w-3" />
-                                    </a></li>
-                                    <li>Create an account or sign in</li>
-                                    <li>Go to Keys → Create Key</li>
-                                    <li>Copy the key (starts with <code className="text-xs bg-background px-1 rounded">sk-or-</code>)</li>
-                                </ol>
-                                <p className="mt-2 text-xs text-muted-foreground">
-                                    You can skip this and add it later in Settings.
-                                </p>
+                            <p className="text-sm text-muted-foreground">
+                                Choose an AI provider to enable smart message triage and reports.
+                            </p>
+
+                            {/* Provider Selection Cards */}
+                            <div className="grid gap-3 sm:grid-cols-2">
+                                {/* OpenRouter Option */}
+                                <button
+                                    type="button"
+                                    onClick={() => setLlmProvider('openrouter')}
+                                    className={`rounded-lg border-2 p-4 text-left transition-all ${llmProvider === 'openrouter'
+                                            ? 'border-primary bg-primary/5'
+                                            : 'border-muted hover:border-muted-foreground/50'
+                                        }`}
+                                >
+                                    <div className="flex items-center gap-2 mb-2">
+                                        <Zap className="h-5 w-5 text-amber-500" />
+                                        <span className="font-semibold">OpenRouter</span>
+                                        {llmProvider === 'openrouter' && (
+                                            <Check className="h-4 w-4 text-primary ml-auto" />
+                                        )}
+                                    </div>
+                                    <p className="text-xs text-muted-foreground">
+                                        Most reliable • 400+ models • Automatic failovers
+                                    </p>
+                                </button>
+
+                                {/* Venice Option */}
+                                <button
+                                    type="button"
+                                    onClick={() => setLlmProvider('venice')}
+                                    className={`rounded-lg border-2 p-4 text-left transition-all ${llmProvider === 'venice'
+                                            ? 'border-primary bg-primary/5'
+                                            : 'border-muted hover:border-muted-foreground/50'
+                                        }`}
+                                >
+                                    <div className="flex items-center gap-2 mb-2">
+                                        <Shield className="h-5 w-5 text-green-500" />
+                                        <span className="font-semibold">Venice AI</span>
+                                        {llmProvider === 'venice' && (
+                                            <Check className="h-4 w-4 text-primary ml-auto" />
+                                        )}
+                                    </div>
+                                    <p className="text-xs text-muted-foreground">
+                                        Maximum privacy • Zero logging • For sensitive work
+                                    </p>
+                                </button>
                             </div>
 
-                            <div className="space-y-2">
-                                <Label htmlFor="openrouter-key">OpenRouter API Key</Label>
-                                <Input
-                                    id="openrouter-key"
-                                    type="password"
-                                    placeholder="sk-or-..."
-                                    value={openrouterKey}
-                                    onChange={(e) => setOpenrouterKey(e.target.value)}
-                                />
-                            </div>
+                            {/* OpenRouter Config */}
+                            {llmProvider === 'openrouter' && (
+                                <div className="space-y-3 animate-in fade-in slide-in-from-top-2 duration-200">
+                                    <div className="rounded-lg border bg-muted/50 p-4 text-sm">
+                                        <p className="mb-2">To get your OpenRouter API key:</p>
+                                        <ol className="list-inside list-decimal space-y-1 text-muted-foreground">
+                                            <li>Go to <a href="https://openrouter.ai/keys" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline inline-flex items-center gap-1">
+                                                openrouter.ai/keys <ExternalLink className="h-3 w-3" />
+                                            </a></li>
+                                            <li>Create an account or sign in</li>
+                                            <li>Create a new key and copy it</li>
+                                        </ol>
+                                    </div>
+                                    <div className="space-y-2">
+                                        <Label htmlFor="openrouter-key">API Key</Label>
+                                        <Input
+                                            id="openrouter-key"
+                                            type="password"
+                                            placeholder="sk-or-..."
+                                            value={openrouterKey}
+                                            onChange={(e) => setOpenrouterKey(e.target.value)}
+                                        />
+                                    </div>
+                                </div>
+                            )}
 
-                            {openrouterKey && (
+                            {/* Venice Config */}
+                            {llmProvider === 'venice' && (
+                                <div className="space-y-3 animate-in fade-in slide-in-from-top-2 duration-200">
+                                    <div className="rounded-lg border bg-muted/50 p-4 text-sm">
+                                        <div className="flex items-start gap-2 mb-2">
+                                            <Shield className="h-4 w-4 text-green-500 mt-0.5 shrink-0" />
+                                            <p className="text-green-600 dark:text-green-400 font-medium">
+                                                Your prompts and responses are never stored or logged.
+                                            </p>
+                                        </div>
+                                        <p className="mb-2">To get your Venice API key:</p>
+                                        <ol className="list-inside list-decimal space-y-1 text-muted-foreground">
+                                            <li>Go to <a href="https://venice.ai/settings/api" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline inline-flex items-center gap-1">
+                                                venice.ai/settings/api <ExternalLink className="h-3 w-3" />
+                                            </a></li>
+                                            <li>Create an account or sign in</li>
+                                            <li>Generate an API key and copy it</li>
+                                        </ol>
+                                    </div>
+                                    <div className="space-y-2">
+                                        <Label htmlFor="venice-key">API Key</Label>
+                                        <Input
+                                            id="venice-key"
+                                            type="password"
+                                            placeholder="venice-..."
+                                            value={veniceKey}
+                                            onChange={(e) => setVeniceKey(e.target.value)}
+                                        />
+                                    </div>
+                                </div>
+                            )}
+
+                            {isLlmConfigured && (
                                 <div className="flex items-center gap-2 text-sm text-green-500">
                                     <Check className="h-4 w-4" />
-                                    LLM features will be enabled
+                                    AI features will be enabled
                                 </div>
+                            )}
+
+                            {!llmProvider && (
+                                <p className="text-xs text-muted-foreground">
+                                    You can skip this and add it later in Settings.
+                                </p>
                             )}
                         </div>
 

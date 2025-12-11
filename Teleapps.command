@@ -16,13 +16,32 @@ echo ""
 
 # Check if virtual environment exists
 if [ ! -d "$SCRIPT_DIR/.venv" ]; then
-    echo -e "${YELLOW}Virtual environment not found. Setting up...${NC}"
+    echo -e "${YELLOW}Virtual environment not found. Creating...${NC}"
     python3 -m venv "$SCRIPT_DIR/.venv"
-    source "$SCRIPT_DIR/.venv/bin/activate"
-    pip install -r "$SCRIPT_DIR/requirements.txt"
-else
-    source "$SCRIPT_DIR/.venv/bin/activate"
+    if [ $? -ne 0 ]; then
+        echo -e "${RED}Failed to create virtual environment.${NC}"
+        echo "Please ensure Python 3 is installed."
+        echo "Press any key to close..."
+        read -n 1
+        exit 1
+    fi
 fi
+
+# Activate virtual environment
+source "$SCRIPT_DIR/.venv/bin/activate"
+
+# Install/update dependencies
+echo -e "${YELLOW}Checking dependencies...${NC}"
+pip install -q --upgrade pip > /dev/null 2>&1
+pip install -q -r "$SCRIPT_DIR/requirements.txt"
+if [ $? -ne 0 ]; then
+    echo -e "${RED}Failed to install dependencies.${NC}"
+    echo "Press any key to close..."
+    read -n 1
+    exit 1
+fi
+echo -e "${GREEN}Dependencies ready.${NC}"
+echo ""
 
 # Check if config exists
 if [ ! -f "$SCRIPT_DIR/config.env" ] && [ ! -f "$HOME/Documents/teleapps/config.env" ]; then

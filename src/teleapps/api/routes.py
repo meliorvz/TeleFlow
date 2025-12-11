@@ -129,7 +129,9 @@ async def check_config():
 class SaveConfigRequest(BaseModel):
     tg_api_id: str | None = None
     tg_api_hash: str | None = None
+    llm_provider: str | None = None
     openrouter_api_key: str | None = None
+    venice_api_key: str | None = None
 
 
 @router.post("/config/save")
@@ -160,8 +162,12 @@ async def save_app_config(request: SaveConfigRequest):
         updates["TG_API_ID"] = request.tg_api_id
     if request.tg_api_hash:
         updates["TG_API_HASH"] = request.tg_api_hash
+    if request.llm_provider:
+        updates["LLM_PROVIDER"] = request.llm_provider
     if request.openrouter_api_key:
         updates["OPENROUTER_API_KEY"] = request.openrouter_api_key
+    if request.venice_api_key:
+        updates["VENICE_API_KEY"] = request.venice_api_key
     
     # Update existing lines or add new
     for line in existing_lines:

@@ -14,7 +14,8 @@ import {
     Users,
     ChevronRight,
     ChevronLeft,
-    Loader2
+    Loader2,
+    Info
 } from 'lucide-react'
 import { getConversations, bulkSendPreview, bulkSendExecute } from '@/lib/api'
 import type { Conversation, BulkSendPreview } from '@/lib/types'
@@ -152,8 +153,18 @@ export function BulkSend() {
                     </CardHeader>
                     <CardContent className="space-y-4">
                         {/* ID Input */}
-                        <div className="space-y-2">
-                            <Label>Load by IDs (comma or newline separated)</Label>
+                        <div className="space-y-3">
+                            <Label className="text-base font-semibold">Load by IDs</Label>
+                            <p className="text-sm text-muted-foreground">
+                                First, <a
+                                    href="/api/csv/conversations/template"
+                                    download
+                                    className="text-primary underline underline-offset-2 hover:text-primary/80"
+                                >
+                                    download the conversations CSV export
+                                </a>
+                                . Then select the relevant conversation IDs from the exported document and paste them below.
+                            </p>
                             <div className="flex gap-2">
                                 <Textarea
                                     placeholder="uuid1, uuid2, or chat_id1, chat_id2..."
@@ -168,10 +179,18 @@ export function BulkSend() {
                             </div>
                         </div>
 
-                        <Separator />
+                        {/* OR Separator */}
+                        <div className="relative py-4">
+                            <div className="absolute inset-0 flex items-center">
+                                <Separator className="w-full" />
+                            </div>
+                            <div className="relative flex justify-center text-xs uppercase">
+                                <span className="bg-card px-2 text-muted-foreground">Or</span>
+                            </div>
+                        </div>
 
                         {/* Conversation List */}
-                        <Label>Or select from list</Label>
+                        <Label className="text-base font-semibold">Select from list</Label>
                         <ScrollArea className="h-64 border rounded-lg">
                             <div className="p-2 space-y-1">
                                 {loading ? (
@@ -287,6 +306,14 @@ export function BulkSend() {
                                 <span className="text-muted-foreground">Delay between sends:</span>
                                 <span className="font-medium">{preview.delay_seconds}s</span>
                             </div>
+                        </div>
+
+                        {/* Info about message timing */}
+                        <div className="flex items-start gap-3 rounded-lg border border-blue-200 bg-blue-50 dark:border-blue-900 dark:bg-blue-950/50 p-3">
+                            <Info className="h-5 w-5 text-blue-600 dark:text-blue-400 shrink-0 mt-0.5" />
+                            <p className="text-sm text-blue-800 dark:text-blue-300">
+                                Messages will be sent one at a time with a <strong>{preview.delay_seconds} second</strong> delay between each send to avoid rate limiting. Total estimated time: <strong>~{Math.ceil((preview.total_count - 1) * preview.delay_seconds / 60)} minutes</strong>.
+                            </p>
                         </div>
 
                         <Separator />

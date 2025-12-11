@@ -1,4 +1,4 @@
-"""LLM client for conversation analysis via OpenRouter."""
+"""LLM client for conversation analysis via OpenRouter or Venice AI."""
 
 import json
 from dataclasses import dataclass
@@ -11,9 +11,9 @@ from .config import Config, get_config
 
 DEFAULT_SYSTEM_PROMPT = """You analyze Telegram conversations for urgency and priority.
 
-INPUT: You receive a batch of conversations, each with:
-- Conversation metadata (type, display_name, username, priority, is_vip, custom fields)
-- Recent unread messages (sender, text, timestamp)
+INPUT: You receive:
+- The inbox owner's identity (username, first_name) - this is whose inbox you're analyzing
+- A batch of conversations, each with metadata and recent unread messages
 
 OUTPUT: Return a JSON array with one object per conversation:
 [{
@@ -25,16 +25,18 @@ OUTPUT: Return a JSON array with one object per conversation:
 }]
 
 SCORING GUIDELINES:
-- 80-100: Requires immediate response (explicit deadlines, VIP sender, urgent keywords)
+- 80-100: Requires immediate response (explicit deadlines, VIP sender, urgent keywords, DIRECT MENTIONS of inbox owner)
 - 50-79: Should review soon (work matters, direct questions, action items)
 - 20-49: Can wait (casual conversation, informational, FYI messages)
 - 0-19: Low priority (spam, marketing, broadcasts, old discussions)
 
-Consider:
-- Sender importance (VIP flag, team members)
-- Time sensitivity (deadlines, "ASAP", "urgent")
-- Business/personal impact
-- Whether a response is expected
+Critical factors (in order of importance):
+1. **Direct mentions of inbox owner** - In group chats, if someone @mentions or directly addresses the inbox owner by username or name, boost urgency by 25-40 points. This is HIGH PRIORITY.
+2. **Replies to inbox owner's messages** - If the message is a reply to something the inbox owner said, boost urgency by 15-25 points.
+3. Sender importance (VIP flag, team members)
+4. Time sensitivity (deadlines, "ASAP", "urgent")
+5. Business/personal impact
+6. Whether a response is expected
 """
 
 
@@ -62,12 +64,12 @@ class ConversationContext:
 
 
 class LLMClient:
-    """Client for LLM API calls via OpenRouter."""
+    """Client for LLM API calls via OpenRouter or Venice AI."""
     
     def __init__(self, config: Config | None = None):
         self.config = config or get_config()
-        self.api_key = self.config.openrouter_api_key
-        self.base_url = self.config.openrouter_base_url
+        self.api_key = self.config.llm_api_key
+        self.base_url = self.config.llm_base_url
         self.model = self.config.llm_model
         self.system_prompt = self.config.llm_system_prompt or DEFAULT_SYSTEM_PROMPT
     
@@ -75,10 +77,18 @@ class LLMClient:
     def enabled(self) -> bool:
         return bool(self.api_key)
     
-    def _build_user_message(self, conversations: list[ConversationContext]) -> str:
+    def _build_user_message(
+        self,
+        conversations: list[ConversationContext],
+        user_info: dict | None = None,
+    ) -> str:
         """Build the user message content from conversation contexts."""
-        data = []
+        # Include inbox owner info so LLM can detect @mentions
+        payload = {}
+        if user_info:
+            payload["inbox_owner"] = user_info
         
+        conv_data = []
         for conv in conversations:
             item = {
                 "conversation_id": conv.conversation_id,
@@ -93,29 +103,33 @@ class LLMClient:
                 item["custom_fields"] = conv.custom_fields
             
             item["messages"] = conv.messages
-            data.append(item)
+            conv_data.append(item)
         
-        return json.dumps(data, indent=2, default=str)
+        payload["conversations"] = conv_data
+        return json.dumps(payload, indent=2, default=str)
     
     async def analyze_batch(
         self,
         conversations: list[ConversationContext],
+        user_info: dict | None = None,
     ) -> list[AnalysisResult]:
         """Analyze a batch of conversations.
         
         Args:
             conversations: List of conversation contexts
+            user_info: Dict with inbox owner info {username, first_name, user_id}
+                       Used by LLM to detect @mentions of the user
         
         Returns:
             List of analysis results
         """
         if not self.enabled:
-            raise RuntimeError("LLM not configured. Set OPENROUTER_API_KEY.")
+            raise RuntimeError("LLM not configured. Set OPENROUTER_API_KEY or VENICE_API_KEY.")
         
         if not conversations:
             return []
         
-        user_message = self._build_user_message(conversations)
+        user_message = self._build_user_message(conversations, user_info)
         
         async with httpx.AsyncClient(timeout=60.0) as client:
             response = await client.post(
@@ -140,6 +154,17 @@ class LLMClient:
         
         # Parse response
         content = data["choices"][0]["message"]["content"]
+        
+        # Strip markdown code block wrappers if present
+        content = content.strip()
+        if content.startswith("```"):
+            # Remove opening ```json or ``` 
+            first_newline = content.find("\n")
+            if first_newline != -1:
+                content = content[first_newline + 1:]
+            # Remove closing ```
+            if content.endswith("```"):
+                content = content[:-3].strip()
         
         try:
             parsed = json.loads(content)

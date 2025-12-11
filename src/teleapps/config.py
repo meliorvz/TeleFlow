@@ -21,10 +21,18 @@ class Config:
     bulk_send_delay_seconds: int = 10
     bulk_send_max_per_job: int = 200
     
+    # LLM Provider
+    llm_provider: str = "openrouter"  # openrouter | venice
+    
     # LLM (OpenRouter)
     openrouter_api_key: str = ""
     openrouter_base_url: str = "https://openrouter.ai/api/v1"
-    llm_model: str = "anthropic/claude-3.5-sonnet"
+    openrouter_model: str = "deepseek/deepseek-v3.2"
+    
+    # LLM (Venice AI - privacy-focused)
+    venice_api_key: str = ""
+    venice_base_url: str = "https://api.venice.ai/api/v1"
+    venice_model: str = "deepseek-v3.2"
     llm_system_prompt: str | None = None
     
     # Report schedule
@@ -54,7 +62,30 @@ class Config:
     
     @property
     def llm_enabled(self) -> bool:
+        if self.llm_provider == "venice":
+            return bool(self.venice_api_key)
         return bool(self.openrouter_api_key)
+    
+    @property
+    def llm_api_key(self) -> str:
+        """Get the API key for the selected LLM provider."""
+        if self.llm_provider == "venice":
+            return self.venice_api_key
+        return self.openrouter_api_key
+    
+    @property
+    def llm_base_url(self) -> str:
+        """Get the base URL for the selected LLM provider."""
+        if self.llm_provider == "venice":
+            return self.venice_base_url
+        return self.openrouter_base_url
+    
+    @property
+    def llm_model(self) -> str:
+        """Get the model for the selected LLM provider."""
+        if self.llm_provider == "venice":
+            return self.venice_model
+        return self.openrouter_model
 
 
 def load_config(env_file: Path | None = None) -> Config:
@@ -103,9 +134,13 @@ def load_config(env_file: Path | None = None) -> Config:
         data_dir=data_dir,
         bulk_send_delay_seconds=get_int("BULK_SEND_DELAY_SECONDS", 10),
         bulk_send_max_per_job=get_int("BULK_SEND_MAX_PER_JOB", 200),
+        llm_provider=os.getenv("LLM_PROVIDER", "openrouter"),
         openrouter_api_key=os.getenv("OPENROUTER_API_KEY", ""),
         openrouter_base_url=os.getenv("OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1"),
-        llm_model=os.getenv("LLM_MODEL", "anthropic/claude-3.5-sonnet"),
+        openrouter_model=os.getenv("OPENROUTER_MODEL", "deepseek/deepseek-v3.2"),
+        venice_api_key=os.getenv("VENICE_API_KEY", ""),
+        venice_base_url=os.getenv("VENICE_BASE_URL", "https://api.venice.ai/api/v1"),
+        venice_model=os.getenv("VENICE_MODEL", "deepseek-v3.2"),
         llm_system_prompt=os.getenv("LLM_SYSTEM_PROMPT"),
         report_cadence=os.getenv("REPORT_CADENCE", "manual"),
         message_cache_limit=get_int("MESSAGE_CACHE_LIMIT", 50),

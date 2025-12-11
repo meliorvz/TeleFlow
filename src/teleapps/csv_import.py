@@ -41,11 +41,11 @@ def export_conversations_template(db_session: Session) -> str:
     # Header with example custom columns
     writer.writerow(["chatid", "chatname", "priority", "is_vip", "notes", "[add_your_columns]"])
     
-    # Get all conversations
+    # Get all conversations, ordered by most recent message first
     conversations = db_session.execute(
         select(Conversation, ConversationMetadata)
         .outerjoin(ConversationMetadata)
-        .order_by(Conversation.display_name)
+        .order_by(Conversation.last_message_date.desc().nulls_last())
     ).all()
     
     for conv, meta in conversations:

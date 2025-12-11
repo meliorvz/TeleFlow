@@ -30,12 +30,15 @@ function App() {
   const [activeJob, setActiveJob] = useState<Job | null>(null)
   const [tab, setTab] = useState('dashboard')
 
-  const loadStatus = useCallback(async () => {
+  const loadStatus = useCallback(async (checkAuth = false) => {
     try {
       const s = await getStatus()
       setStatus(s)
 
-      if (!s.telegram_connected) {
+      // Only set needsAuth on initial load, not on refreshes
+      // This prevents a race condition where the dialog reopens
+      // after successful auth before the session is fully registered
+      if (checkAuth && !s.telegram_connected) {
         setNeedsAuth(true)
       }
     } catch (e) {
@@ -51,11 +54,11 @@ function App() {
       if (!result.configured) {
         setNeedsSetup(true)
       } else {
-        loadStatus()
+        loadStatus(true) // Check auth on initial load
       }
     } catch {
       // If check fails, try loading status directly
-      loadStatus()
+      loadStatus(true) // Check auth on initial load
     }
   }, [loadStatus])
 

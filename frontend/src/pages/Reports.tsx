@@ -66,7 +66,7 @@ export function Reports() {
     }
 
     return (
-        <PageLayout variant="full">
+        <PageLayout variant="full" className="flex-row">
             {/* Reports List */}
             <div className="w-80 border-r flex flex-col">
                 <div className="p-4 border-b flex items-center justify-between">

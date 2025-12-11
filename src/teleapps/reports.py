@@ -50,6 +50,17 @@ async def generate_report(
     Returns:
         Report model instance
     """
+    # Get the authenticated user's info for @mention detection
+    me = await tg_client.get_me()
+    user_info = None
+    if me:
+        user_info = {
+            "user_id": me.id,
+            "username": me.username,
+            "first_name": getattr(me, "first_name", None),
+            "last_name": getattr(me, "last_name", None),
+        }
+    
     # Get "since" date
     if since is None:
         since = get_caught_up_date(db_session)
@@ -65,15 +76,13 @@ async def generate_report(
     config = get_config()
     age_cutoff = datetime.utcnow() - timedelta(days=config.llm_conversation_max_age_days)
     
-    # Find conversations with unread messages or activity since date
-    # BUT exclude conversations older than the age cutoff
+    # Find conversations with unread messages
+    # Only include conversations with unread messages - no point summarizing read chats
+    # Also exclude conversations older than the age cutoff
     query = (
         select(Conversation, ConversationMetadata)
         .outerjoin(ConversationMetadata)
-        .where(
-            (Conversation.unread_count > 0) | 
-            (Conversation.last_message_date >= since)
-        )
+        .where(Conversation.unread_count > 0)
         .where(
             # Age cutoff - exclude stale conversations
             Conversation.last_message_date >= age_cutoff
@@ -157,7 +166,7 @@ async def generate_report(
     
     for i in range(0, len(contexts), batch_size):
         batch = contexts[i:i + batch_size]
-        batch_results = await llm_client.analyze_batch(batch)
+        batch_results = await llm_client.analyze_batch(batch, user_info=user_info)
         all_results.extend(batch_results)
     
     # Organize into sections
