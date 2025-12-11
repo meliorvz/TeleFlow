@@ -81,7 +81,7 @@ export function AuthDialog({ open, onComplete }: AuthDialogProps) {
     }
 
     return (
-        <Dialog open={open}>
+        <Dialog open={open} onOpenChange={() => { }}>
             <DialogContent className="sm:max-w-md" onInteractOutside={(e) => e.preventDefault()}>
                 <DialogHeader>
                     <DialogTitle>Connect to Telegram</DialogTitle>

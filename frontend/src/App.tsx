@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Button } from '@/components/ui/button'
 import { Progress } from '@/components/ui/progress'
@@ -30,6 +30,9 @@ function App() {
   const [activeJob, setActiveJob] = useState<Job | null>(null)
   const [tab, setTab] = useState('dashboard')
 
+  // Track if we've done initial sync on this page load
+  const hasInitialSyncRun = useRef(false)
+
   const loadStatus = useCallback(async (checkAuth = false) => {
     try {
       const s = await getStatus()
@@ -53,6 +56,7 @@ function App() {
       const result = await checkConfig()
       if (!result.configured) {
         setNeedsSetup(true)
+        setLoading(false)
       } else {
         loadStatus(true) // Check auth on initial load
       }
@@ -65,6 +69,14 @@ function App() {
   useEffect(() => {
     checkSetup()
   }, [checkSetup])
+
+  // Trigger sync when Telegram connects for the first time on this page load
+  useEffect(() => {
+    if (status?.telegram_connected && !hasInitialSyncRun.current && !needsSetup && !needsAuth) {
+      hasInitialSyncRun.current = true
+      triggerSync().catch(e => console.error('Initial sync failed:', e))
+    }
+  }, [status?.telegram_connected, needsSetup, needsAuth])
 
   // WebSocket for job updates
   useEffect(() => {
@@ -119,7 +131,7 @@ function App() {
 
   const handleSetupComplete = () => {
     setNeedsSetup(false)
-    loadStatus()
+    loadStatus(true) // Check auth after setup completes
   }
 
   const handleAuthComplete = () => {

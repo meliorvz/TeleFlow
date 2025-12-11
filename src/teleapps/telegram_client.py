@@ -47,6 +47,21 @@ class TelegramClientWrapper:
             await self._client.disconnect()
             self._connected = False
     
+    async def log_out(self) -> bool:
+        """Log out and terminate the session on Telegram's side.
+        
+        This removes the session from the user's active devices list
+        in Telegram settings. Returns True if successful.
+        """
+        if not self._client:
+            return False
+        try:
+            await self._client.log_out()
+            self._connected = False
+            return True
+        except Exception:
+            return False
+    
     async def is_authorized(self) -> bool:
         """Check if already logged in."""
         if not self._client:

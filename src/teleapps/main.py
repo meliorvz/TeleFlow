@@ -73,6 +73,64 @@ def create_app() -> FastAPI:
         config = get_config()
         ensure_data_dir(config)
         init_db(config)
+        
+        # Start scheduled sync if interval is configured
+        if config.sync_interval_minutes > 0:
+            import asyncio
+            asyncio.create_task(scheduled_sync_loop())
+    
+    async def scheduled_sync_loop():
+        """Background loop for periodic sync."""
+        from .api.routes import get_tg_client
+        from .db import get_session
+        from .sync import sync_dialogs
+        from .jobs import get_job_manager, JobType, JobStatus
+        
+        config = get_config()
+        interval_seconds = config.sync_interval_minutes * 60
+        
+        while True:
+            try:
+                # Wait for Telegram client to be ready
+                try:
+                    client = await get_tg_client()
+                    if not await client.is_authorized():
+                        await asyncio.sleep(30)  # Check again in 30s
+                        continue
+                except Exception:
+                    await asyncio.sleep(30)
+                    continue
+                
+                # Run sync as a tracked job
+                job_manager = get_job_manager()
+                job = job_manager.create_job(JobType.SYNC)
+                job.status = JobStatus.RUNNING
+                
+                try:
+                    with get_session() as session:
+                        result = await sync_dialogs(
+                            client, session,
+                            on_progress=lambda c, t, m: job_manager.update_progress(job.id, c, t, m)
+                        )
+                    
+                    job_manager.complete_job(job.id, {
+                        "new": result.new_count,
+                        "updated": result.updated_count,
+                        "unchanged": result.unchanged_count,
+                        "scheduled": True,
+                    })
+                except Exception as e:
+                    job_manager.fail_job(job.id, str(e))
+                
+            except Exception as e:
+                print(f"Scheduled sync error: {e}")
+            
+            # Wait for the configured interval (re-read config each time in case it changed)
+            config = get_config()
+            interval_seconds = config.sync_interval_minutes * 60
+            if interval_seconds <= 0:
+                break  # Sync disabled, exit loop
+            await asyncio.sleep(interval_seconds)
     
     return app
 

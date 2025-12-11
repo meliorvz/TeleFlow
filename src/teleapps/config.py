@@ -14,8 +14,8 @@ class Config:
     tg_api_id: int = 0
     tg_api_hash: str = ""
     
-    # Data paths
-    data_dir: Path = field(default_factory=lambda: Path.home() / "Documents" / "teleapps")
+    # Data paths - localdata folder within the app directory
+    data_dir: Path = field(default_factory=lambda: Path(__file__).parent.parent.parent / "localdata")
     
     # Bulk send
     bulk_send_delay_seconds: int = 10
@@ -43,6 +43,9 @@ class Config:
     
     # LLM conversation age cutoff (days)
     llm_conversation_max_age_days: int = 90
+    
+    # Auto-sync interval (minutes) - 0 to disable
+    sync_interval_minutes: int = 10
     
     # Web server
     web_host: str = "127.0.0.1"
@@ -91,14 +94,17 @@ class Config:
 def load_config(env_file: Path | None = None) -> Config:
     """Load configuration from environment variables and optional .env file."""
     
-    # Try to find config.env in various locations
+    # App root directory (where Teleapps.command lives)
+    app_root = Path(__file__).parent.parent.parent
+    localdata_dir = app_root / "localdata"
+    
+    # Try to find config.env in various locations (localdata first)
     if env_file is None:
         for candidate in [
+            localdata_dir / "config.env",  # Primary: localdata folder
+            app_root / "config.env",  # Legacy: app root
             Path.cwd() / "config.env",
             Path.cwd().parent / "config.env",  # If running from src/
-            Path(__file__).parent.parent.parent.parent / "config.env",  # Relative to this file
-            Path.home() / "teleapps" / "config.env",
-            Path.home() / "Documents" / "teleapps" / "config.env",
         ]:
             if candidate.exists():
                 env_file = candidate
@@ -121,12 +127,12 @@ def load_config(env_file: Path | None = None) -> Config:
         except ValueError:
             return default
     
-    # Build data_dir path
+    # Build data_dir path (default: localdata folder within app)
     data_dir_str = os.getenv("DATA_DIR")
     if data_dir_str:
         data_dir = Path(data_dir_str).expanduser()
     else:
-        data_dir = Path.home() / "Documents" / "teleapps"
+        data_dir = localdata_dir
     
     return Config(
         tg_api_id=api_id,
@@ -145,6 +151,7 @@ def load_config(env_file: Path | None = None) -> Config:
         report_cadence=os.getenv("REPORT_CADENCE", "manual"),
         message_cache_limit=get_int("MESSAGE_CACHE_LIMIT", 50),
         llm_conversation_max_age_days=get_int("LLM_CONVERSATION_MAX_AGE_DAYS", 90),
+        sync_interval_minutes=get_int("SYNC_INTERVAL_MINUTES", 10),
         web_host=os.getenv("WEB_HOST", "127.0.0.1"),
         web_port=get_int("WEB_PORT", 8080),
     )

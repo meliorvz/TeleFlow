@@ -192,7 +192,7 @@ export function BulkSend() {
                         {/* Conversation List */}
                         <Label className="text-base font-semibold">Select from list</Label>
                         <ScrollArea className="h-64 border rounded-lg">
-                            <div className="p-2 space-y-1">
+                            <div className="p-2 grid gap-1" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))' }}>
                                 {loading ? (
                                     Array.from({ length: 5 }).map((_, i) => (
                                         <Skeleton key={i} className="h-10 w-full" />
@@ -202,14 +202,14 @@ export function BulkSend() {
                                         <button
                                             key={conv.uuid}
                                             onClick={() => handleToggle(conv.uuid)}
-                                            className={`w-full flex items-center justify-between p-2 rounded transition-colors ${selected.has(conv.uuid)
+                                            className={`flex items-center justify-between p-2 rounded transition-colors ${selected.has(conv.uuid)
                                                 ? 'bg-primary text-primary-foreground'
                                                 : 'hover:bg-muted'
                                                 }`}
                                         >
                                             <span className="truncate">{conv.display_name}</span>
                                             {selected.has(conv.uuid) && (
-                                                <CheckCircle className="h-4 w-4 shrink-0" />
+                                                <CheckCircle className="h-4 w-4 shrink-0 ml-1" />
                                             )}
                                         </button>
                                     ))

@@ -9,6 +9,7 @@ import { FileText, AlertCircle, Clock, CheckCircle, Loader2 } from 'lucide-react
 import { getLatestReport, generateReport } from '@/lib/api'
 import type { Status, Report, ReportItem } from '@/lib/types'
 import { PageLayout } from '@/components/PageLayout'
+import { ReportItemCard } from '@/components/ReportItemCard'
 
 interface DashboardProps {
     status: Status | null
@@ -56,9 +57,9 @@ export function Dashboard({ status }: DashboardProps) {
     }
 
     return (
-        <PageLayout className="space-y-6">
+        <PageLayout variant="full" className="p-6 gap-6">
             {/* Stats Grid */}
-            <div className="grid gap-4 md:grid-cols-4">
+            <div className="grid gap-4 md:grid-cols-4 flex-shrink-0">
                 <Card>
                     <CardHeader className="pb-2">
                         <CardDescription>Total Conversations</CardDescription>
@@ -94,8 +95,8 @@ export function Dashboard({ status }: DashboardProps) {
             </div>
 
             {/* Latest Report */}
-            <Card>
-                <CardHeader className="flex flex-row items-center justify-between">
+            <Card className="flex-1 min-h-0 flex flex-col">
+                <CardHeader className="flex flex-row items-center justify-between flex-shrink-0">
                     <div>
                         <CardTitle className="flex items-center gap-2">
                             <FileText className="h-5 w-5" />
@@ -116,15 +117,15 @@ export function Dashboard({ status }: DashboardProps) {
                         Generate New Report
                     </Button>
                 </CardHeader>
-                <CardContent>
+                <CardContent className="flex-1 min-h-0">
                     {loading ? (
                         <div className="space-y-4">
                             <Skeleton className="h-20 w-full" />
                             <Skeleton className="h-20 w-full" />
                         </div>
                     ) : report?.data ? (
-                        <ScrollArea className="h-[400px]">
-                            <div className="space-y-6">
+                        <ScrollArea className="h-full">
+                            <div className="space-y-6 pr-4">
                                 <ReportSection
                                     title="Reply Now"
                                     icon={<AlertCircle className="h-4 w-4 text-destructive" />}
@@ -179,8 +180,6 @@ function ReportSection({
         return null
     }
 
-    const badgeVariant = urgency === 'high' ? 'destructive' : urgency === 'medium' ? 'warning' : 'success'
-
     return (
         <div className="space-y-3">
             <div className="flex items-center gap-2">
@@ -190,19 +189,11 @@ function ReportSection({
             </div>
             <div className="space-y-2">
                 {items.map((item) => (
-                    <div key={item.conversation_uuid} className="rounded-lg border bg-card p-4">
-                        <div className="flex items-start justify-between">
-                            <div>
-                                <div className="font-medium">{item.display_name}</div>
-                                {item.username && (
-                                    <div className="text-sm text-muted-foreground">@{item.username}</div>
-                                )}
-                            </div>
-                            <Badge variant={badgeVariant}>{item.urgency_score}</Badge>
-                        </div>
-                        <p className="mt-2 text-sm text-muted-foreground">{item.summary}</p>
-                        <p className="mt-1 text-xs italic text-muted-foreground">{item.reasoning}</p>
-                    </div>
+                    <ReportItemCard
+                        key={item.conversation_uuid}
+                        item={item}
+                        urgency={urgency}
+                    />
                 ))}
             </div>
         </div>

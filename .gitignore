@@ -1,3 +1,6 @@
+# Local user data (contains sensitive Telegram session)
+localdata/
+
 # Python
 __pycache__/
 *.py[cod]
@@ -58,6 +61,8 @@ Thumbs.db
 
 # Database
 *.db
+*.db-wal
+*.db-shm
 *.sqlite
 *.sqlite3
 

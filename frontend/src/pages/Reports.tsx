@@ -8,6 +8,7 @@ import { FileText, Calendar, Eye, Loader2 } from 'lucide-react'
 import { getReports, getReport, generateReport } from '@/lib/api'
 import type { Report } from '@/lib/types'
 import { PageLayout } from '@/components/PageLayout'
+import { ReportItemCard } from '@/components/ReportItemCard'
 
 export function Reports() {
     const [reports, setReports] = useState<Report[]>([])
@@ -156,13 +157,11 @@ export function Reports() {
                                     </CardHeader>
                                     <CardContent className="space-y-3">
                                         {selectedReport.data.sections.reply_now.map((item) => (
-                                            <div key={item.conversation_uuid} className="border rounded-lg p-3">
-                                                <div className="flex items-center justify-between">
-                                                    <span className="font-medium">{item.display_name}</span>
-                                                    <Badge variant="destructive">{item.urgency_score}</Badge>
-                                                </div>
-                                                <p className="text-sm text-muted-foreground mt-1">{item.summary}</p>
-                                            </div>
+                                            <ReportItemCard
+                                                key={item.conversation_uuid}
+                                                item={item}
+                                                urgency="high"
+                                            />
                                         ))}
                                     </CardContent>
                                 </Card>
@@ -179,13 +178,11 @@ export function Reports() {
                                     </CardHeader>
                                     <CardContent className="space-y-3">
                                         {selectedReport.data.sections.review.map((item) => (
-                                            <div key={item.conversation_uuid} className="border rounded-lg p-3">
-                                                <div className="flex items-center justify-between">
-                                                    <span className="font-medium">{item.display_name}</span>
-                                                    <Badge variant="warning">{item.urgency_score}</Badge>
-                                                </div>
-                                                <p className="text-sm text-muted-foreground mt-1">{item.summary}</p>
-                                            </div>
+                                            <ReportItemCard
+                                                key={item.conversation_uuid}
+                                                item={item}
+                                                urgency="medium"
+                                            />
                                         ))}
                                     </CardContent>
                                 </Card>
@@ -202,13 +199,11 @@ export function Reports() {
                                     </CardHeader>
                                     <CardContent className="space-y-3">
                                         {selectedReport.data.sections.low_priority.map((item) => (
-                                            <div key={item.conversation_uuid} className="border rounded-lg p-3">
-                                                <div className="flex items-center justify-between">
-                                                    <span className="font-medium">{item.display_name}</span>
-                                                    <Badge variant="success">{item.urgency_score}</Badge>
-                                                </div>
-                                                <p className="text-sm text-muted-foreground mt-1">{item.summary}</p>
-                                            </div>
+                                            <ReportItemCard
+                                                key={item.conversation_uuid}
+                                                item={item}
+                                                urgency="low"
+                                            />
                                         ))}
                                     </CardContent>
                                 </Card>

@@ -106,6 +106,7 @@ async def get_app_config():
         "report_cadence": config.report_cadence,
         "bulk_send_delay_seconds": config.bulk_send_delay_seconds,
         "bulk_send_max_per_job": config.bulk_send_max_per_job,
+        "sync_interval_minutes": config.sync_interval_minutes,
     }
 
 
@@ -132,6 +133,7 @@ class SaveConfigRequest(BaseModel):
     llm_provider: str | None = None
     openrouter_api_key: str | None = None
     venice_api_key: str | None = None
+    sync_interval_minutes: int | None = None
 
 
 @router.post("/config/save")
@@ -168,6 +170,8 @@ async def save_app_config(request: SaveConfigRequest):
         updates["OPENROUTER_API_KEY"] = request.openrouter_api_key
     if request.venice_api_key:
         updates["VENICE_API_KEY"] = request.venice_api_key
+    if request.sync_interval_minutes is not None:
+        updates["SYNC_INTERVAL_MINUTES"] = str(request.sync_interval_minutes)
     
     # Update existing lines or add new
     for line in existing_lines:
@@ -861,4 +865,77 @@ async def get_public_config():
         "report_cadence": config.report_cadence,
         "bulk_send_delay_seconds": config.bulk_send_delay_seconds,
         "bulk_send_max_per_job": config.bulk_send_max_per_job,
+    }
+
+
+# --- Data Management ---
+
+@router.delete("/data/reset")
+async def reset_all_data(terminate_telegram: bool = False):
+    """Delete all local data (database, session, config).
+    
+    This clears the entire localdata folder. The app will need
+    to be restarted and reconfigured after this operation.
+    
+    Args:
+        terminate_telegram: If True, also terminates the Telegram session
+            on Telegram's side (removes from active devices list). This is
+            recommended for security but may fail if already disconnected.
+    """
+    import shutil
+    import importlib
+    
+    config = get_config()
+    data_dir = config.data_dir
+    
+    # Close any open database connections
+    from ..db import _engine, _SessionLocal
+    global _engine, _SessionLocal, _tg_client
+    
+    telegram_logged_out = False
+    
+    # Handle Telegram client
+    if _tg_client:
+        try:
+            if terminate_telegram:
+                # Actually log out (terminates session on Telegram's side)
+                telegram_logged_out = await _tg_client.log_out()
+            else:
+                # Just disconnect locally
+                await _tg_client.disconnect()
+        except:
+            pass
+        _tg_client = None
+    
+    # Clear database globals to release file handles
+    from .. import db as db_module
+    db_module._engine = None
+    db_module._SessionLocal = None
+    
+    # Reset config module so checkConfig returns unconfigured
+    from .. import config as config_module
+    config_module._config = None
+    
+    deleted_files = []
+    errors = []
+    
+    # Delete all files in localdata directory
+    if data_dir.exists():
+        for item in data_dir.iterdir():
+            try:
+                if item.is_file():
+                    item.unlink()
+                    deleted_files.append(item.name)
+                elif item.is_dir():
+                    shutil.rmtree(item)
+                    deleted_files.append(f"{item.name}/")
+            except Exception as e:
+                errors.append(f"{item.name}: {str(e)}")
+    
+    return {
+        "status": "cleared",
+        "deleted": deleted_files,
+        "errors": errors,
+        "telegram_logged_out": telegram_logged_out,
+        "message": "Please restart the application to complete the reset."
     }

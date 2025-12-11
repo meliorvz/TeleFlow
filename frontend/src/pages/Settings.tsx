@@ -1,9 +1,10 @@
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Separator } from '@/components/ui/separator'
+import { Checkbox } from '@/components/ui/checkbox'
 import {
     Settings,
     Database,
@@ -15,13 +16,16 @@ import {
     Check,
     Loader2,
     Shield,
-    Zap
+    Zap,
+    AlertTriangle,
+    RefreshCw
 } from 'lucide-react'
 import {
     clearMessageCache,
     saveConfig,
     uploadConversationsCsv,
-    uploadParticipantsCsv
+    uploadParticipantsCsv,
+    getConfig
 } from '@/lib/api'
 import type { Status } from '@/lib/types'
 import { PageLayout } from '@/components/PageLayout'
@@ -46,6 +50,25 @@ export function SettingsPage({ status, onRefresh }: SettingsPageProps) {
     const convFileRef = useRef<HTMLInputElement>(null)
     const partFileRef = useRef<HTMLInputElement>(null)
 
+    const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
+    const [deletingData, setDeletingData] = useState(false)
+    const [deleteResult, setDeleteResult] = useState<{ success: boolean; message: string } | null>(null)
+    const [terminateTelegram, setTerminateTelegram] = useState(true) // Recommended for security
+
+    // Sync settings state
+    const [syncInterval, setSyncInterval] = useState<number>(10)
+    const [savingSyncInterval, setSavingSyncInterval] = useState(false)
+    const [syncIntervalSaveSuccess, setSyncIntervalSaveSuccess] = useState(false)
+
+    // Load current config on mount
+    useEffect(() => {
+        getConfig().then((config: any) => {
+            if (config.sync_interval_minutes !== undefined) {
+                setSyncInterval(config.sync_interval_minutes)
+            }
+        }).catch(() => { })
+    }, [])
+
     const handleClearCache = async () => {
         setClearingCache(true)
         try {
@@ -54,6 +77,20 @@ export function SettingsPage({ status, onRefresh }: SettingsPageProps) {
             console.error('Failed to clear cache:', e)
         } finally {
             setClearingCache(false)
+        }
+    }
+
+    const handleSaveSyncInterval = async () => {
+        setSavingSyncInterval(true)
+        setSyncIntervalSaveSuccess(false)
+        try {
+            await saveConfig({ sync_interval_minutes: syncInterval } as any)
+            setSyncIntervalSaveSuccess(true)
+            setTimeout(() => setSyncIntervalSaveSuccess(false), 3000)
+        } catch (e) {
+            console.error('Failed to save sync interval:', e)
+        } finally {
+            setSavingSyncInterval(false)
         }
     }
 
@@ -120,6 +157,34 @@ export function SettingsPage({ status, onRefresh }: SettingsPageProps) {
         }
     }
 
+    const handleDeleteAllData = async () => {
+        setDeletingData(true)
+        setDeleteResult(null)
+        try {
+            const url = `/api/data/reset?terminate_telegram=${terminateTelegram}`
+            const res = await fetch(url, { method: 'DELETE' })
+            const data = await res.json()
+            if (res.ok) {
+                let message = data.message || 'Data cleared successfully'
+                if (terminateTelegram && data.telegram_logged_out) {
+                    message = 'Data cleared and Telegram session terminated.'
+                } else if (terminateTelegram && !data.telegram_logged_out) {
+                    message = 'Data cleared. Note: Telegram session could not be terminated (may need manual removal from Telegram settings).'
+                }
+                setDeleteResult({ success: true, message })
+                setShowDeleteConfirm(false)
+                // Refresh after a short delay to show the message
+                setTimeout(() => window.location.reload(), 2000)
+            } else {
+                setDeleteResult({ success: false, message: 'Failed to delete data' })
+            }
+        } catch (e) {
+            setDeleteResult({ success: false, message: 'Failed to delete data' })
+        } finally {
+            setDeletingData(false)
+        }
+    }
+
     const currentApiKey = selectedProvider === 'openrouter' ? openrouterKey : veniceKey
     const setCurrentApiKey = selectedProvider === 'openrouter' ? setOpenrouterKey : setVeniceKey
 
@@ -163,6 +228,48 @@ export function SettingsPage({ status, onRefresh }: SettingsPageProps) {
                 </CardContent>
             </Card>
 
+            {/* Sync Settings */}
+            <Card>
+                <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                        <RefreshCw className="h-5 w-5" />
+                        Sync Settings
+                    </CardTitle>
+                    <CardDescription>
+                        Configure how often Teleapps syncs conversations from Telegram.
+                    </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                    <div className="space-y-2">
+                        <Label htmlFor="sync-interval">Sync Interval (minutes)</Label>
+                        <p className="text-sm text-muted-foreground">
+                            Set how frequently your Telegram conversations are synced automatically. Set to 0 to disable auto-sync.
+                        </p>
+                        <div className="flex gap-2">
+                            <Input
+                                id="sync-interval"
+                                type="number"
+                                min={0}
+                                max={1440}
+                                value={syncInterval}
+                                onChange={(e) => setSyncInterval(parseInt(e.target.value) || 0)}
+                                className="w-32"
+                            />
+                            <Button onClick={handleSaveSyncInterval} disabled={savingSyncInterval}>
+                                {savingSyncInterval && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                                Save
+                            </Button>
+                        </div>
+                        {syncIntervalSaveSuccess && (
+                            <p className="text-sm text-green-500 flex items-center gap-1">
+                                <Check className="h-4 w-4" />
+                                Saved (restart server to apply)
+                            </p>
+                        )}
+                    </div>
+                </CardContent>
+            </Card>
+
             {/* LLM Settings */}
             <Card>
                 <CardHeader>
@@ -181,8 +288,8 @@ export function SettingsPage({ status, onRefresh }: SettingsPageProps) {
                                 type="button"
                                 onClick={() => setSelectedProvider('openrouter')}
                                 className={`rounded-lg border-2 p-3 text-left transition-all ${selectedProvider === 'openrouter'
-                                        ? 'border-primary bg-primary/5'
-                                        : 'border-muted hover:border-muted-foreground/50'
+                                    ? 'border-primary bg-primary/5'
+                                    : 'border-muted hover:border-muted-foreground/50'
                                     }`}
                             >
                                 <div className="flex items-center gap-2">
@@ -202,8 +309,8 @@ export function SettingsPage({ status, onRefresh }: SettingsPageProps) {
                                 type="button"
                                 onClick={() => setSelectedProvider('venice')}
                                 className={`rounded-lg border-2 p-3 text-left transition-all ${selectedProvider === 'venice'
-                                        ? 'border-primary bg-primary/5'
-                                        : 'border-muted hover:border-muted-foreground/50'
+                                    ? 'border-primary bg-primary/5'
+                                    : 'border-muted hover:border-muted-foreground/50'
                                     }`}
                             >
                                 <div className="flex items-center gap-2">
@@ -290,6 +397,82 @@ export function SettingsPage({ status, onRefresh }: SettingsPageProps) {
                             Clear Cache
                         </Button>
                     </div>
+
+                    <Separator />
+
+                    <div className="space-y-3">
+                        <div className="flex items-center justify-between">
+                            <div>
+                                <p className="font-medium text-destructive">Delete All Local Data</p>
+                                <p className="text-sm text-muted-foreground">Remove database, Telegram session, and config</p>
+                            </div>
+                            {!showDeleteConfirm ? (
+                                <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => setShowDeleteConfirm(true)}
+                                >
+                                    <Trash2 className="mr-2 h-4 w-4" />
+                                    Delete All Data
+                                </Button>
+                            ) : (
+                                <div className="flex gap-2">
+                                    <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        onClick={() => setShowDeleteConfirm(false)}
+                                        disabled={deletingData}
+                                    >
+                                        Cancel
+                                    </Button>
+                                    <Button
+                                        variant="destructive"
+                                        size="sm"
+                                        onClick={handleDeleteAllData}
+                                        disabled={deletingData}
+                                    >
+                                        {deletingData ? (
+                                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                        ) : (
+                                            <AlertTriangle className="mr-2 h-4 w-4" />
+                                        )}
+                                        Confirm Delete
+                                    </Button>
+                                </div>
+                            )}
+                        </div>
+
+                        {showDeleteConfirm && (
+                            <div className="flex items-start gap-2 p-3 rounded-lg bg-muted/50">
+                                <Checkbox
+                                    id="terminate-telegram"
+                                    checked={terminateTelegram}
+                                    onCheckedChange={(checked: boolean | 'indeterminate') => setTerminateTelegram(checked === true)}
+                                />
+                                <div className="space-y-1">
+                                    <Label
+                                        htmlFor="terminate-telegram"
+                                        className="text-sm font-medium cursor-pointer"
+                                    >
+                                        Also terminate Telegram session
+                                    </Label>
+                                    <p className="text-xs text-muted-foreground">
+                                        Removes this device from your Telegram active sessions list.
+                                        Recommended for security.
+                                    </p>
+                                </div>
+                            </div>
+                        )}
+                    </div>
+
+                    {deleteResult && (
+                        <div className={`p-3 rounded-lg border ${deleteResult.success
+                            ? 'bg-green-500/10 border-green-500/30 text-green-500'
+                            : 'bg-destructive/10 border-destructive/30 text-destructive'
+                            }`}>
+                            {deleteResult.message}
+                        </div>
+                    )}
                 </CardContent>
             </Card>
 
