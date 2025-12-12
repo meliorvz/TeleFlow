@@ -47,6 +47,9 @@ class Config:
     # Auto-sync interval (minutes) - 0 to disable
     sync_interval_minutes: int = 10
     
+    # Max participants to sync per group (to prevent performance issues with large groups)
+    sync_max_participants_per_group: int = 100
+    
     # Web server
     web_host: str = "127.0.0.1"
     web_port: int = 8080
@@ -152,6 +155,7 @@ def load_config(env_file: Path | None = None) -> Config:
         message_cache_limit=get_int("MESSAGE_CACHE_LIMIT", 50),
         llm_conversation_max_age_days=get_int("LLM_CONVERSATION_MAX_AGE_DAYS", 90),
         sync_interval_minutes=get_int("SYNC_INTERVAL_MINUTES", 10),
+        sync_max_participants_per_group=get_int("SYNC_MAX_PARTICIPANTS_PER_GROUP", 100),
         web_host=os.getenv("WEB_HOST", "127.0.0.1"),
         web_port=get_int("WEB_PORT", 8080),
     )

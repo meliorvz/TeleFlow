@@ -51,7 +51,7 @@ class ConversationMetadata(Base):
     )
     priority = Column(String(20), default="medium")  # high | medium | low
     notes = Column(Text, nullable=True)
-    is_vip = Column(Boolean, default=False)
+    tags = Column(Text, nullable=True)  # JSON array: ["Work", "BD", "Legal"]
     muted_in_teleapps = Column(Boolean, default=False)
     custom_fields_json = Column(Text, nullable=True)  # JSON for CSV-imported columns
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
@@ -61,7 +61,6 @@ class ConversationMetadata(Base):
     
     __table_args__ = (
         Index("ix_metadata_priority", "priority"),
-        Index("ix_metadata_vip", "is_vip"),
     )
 
 
@@ -74,12 +73,15 @@ class Participant(Base):
     tg_user_id = Column(Integer, nullable=True, unique=True)
     display_name = Column(Text, nullable=False)
     username = Column(String(100), nullable=True)
+    priority = Column(String(20), default="medium")  # high | medium | low
+    tags = Column(Text, nullable=True)  # JSON array: ["Product", "CEO", "Defi"]
     custom_fields_json = Column(Text, nullable=True)  # JSON for CSV-imported columns
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     
     __table_args__ = (
         Index("ix_participants_tg_user", "tg_user_id"),
+        Index("ix_participants_priority", "priority"),
     )
 
 

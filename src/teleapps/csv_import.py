@@ -24,14 +24,14 @@ class ImportResult:
 
 
 # Reserved columns that map to specific fields
-CONVERSATION_RESERVED_COLUMNS = {"chatid", "chatname", "priority", "is_vip", "notes", "muted"}
-PARTICIPANT_RESERVED_COLUMNS = {"userid", "username", "displayname", "notes"}
+CONVERSATION_RESERVED_COLUMNS = {"chatid", "chatname", "priority", "tags", "notes", "muted"}
+PARTICIPANT_RESERVED_COLUMNS = {"userid", "username", "displayname", "priority", "tags", "notes"}
 
 
 def export_conversations_template(db_session: Session) -> str:
     """Export a CSV template with all conversations.
     
-    Format: chatid,chatname,[add your columns here]
+    Format: chatid,chatname,priority,tags,notes,[add your columns here]
     
     Returns CSV string.
     """
@@ -39,7 +39,7 @@ def export_conversations_template(db_session: Session) -> str:
     writer = csv.writer(output)
     
     # Header with example custom columns
-    writer.writerow(["chatid", "chatname", "priority", "is_vip", "notes", "[add_your_columns]"])
+    writer.writerow(["chatid", "chatname", "priority", "tags", "notes", "[add_your_columns]"])
     
     # Get all conversations, ordered by most recent message first
     conversations = db_session.execute(
@@ -49,11 +49,21 @@ def export_conversations_template(db_session: Session) -> str:
     ).all()
     
     for conv, meta in conversations:
+        # Parse tags JSON to comma-separated string
+        tags_str = ""
+        if meta and meta.tags:
+            try:
+                tags_list = json.loads(meta.tags)
+                if isinstance(tags_list, list):
+                    tags_str = ",".join(tags_list)
+            except json.JSONDecodeError:
+                pass
+        
         writer.writerow([
             conv.tg_id,
             conv.display_name,
             meta.priority if meta else "medium",
-            "true" if (meta and meta.is_vip) else "false",
+            tags_str,
             meta.notes if meta else "",
             "",  # Placeholder for custom columns
         ])
@@ -68,7 +78,7 @@ def import_conversations_metadata(db_session: Session, csv_content: str) -> Impo
     Other columns:
     - chatname (ignored, just for reference)
     - priority (high/medium/low)
-    - is_vip (true/false)
+    - tags (comma-separated list, e.g. "Work,BD,Legal")
     - notes (text)
     - Any other columns stored in custom_fields_json
     
@@ -127,8 +137,15 @@ def import_conversations_metadata(db_session: Session, csv_content: str) -> Impo
                 if priority in ("high", "medium", "low"):
                     meta.priority = priority
             
-            if "is_vip" in row and row["is_vip"].strip():
-                meta.is_vip = row["is_vip"].strip().lower() in ("true", "1", "yes")
+            # Handle tags - parse comma-separated to JSON array
+            if "tags" in row:
+                tags_str = row["tags"].strip()
+                if tags_str:
+                    # Split by comma and clean up each tag
+                    tags_list = [t.strip() for t in tags_str.split(",") if t.strip()]
+                    meta.tags = json.dumps(tags_list) if tags_list else None
+                else:
+                    meta.tags = None
             
             if "notes" in row:
                 meta.notes = row["notes"].strip() or None
@@ -166,7 +183,7 @@ def import_conversations_metadata(db_session: Session, csv_content: str) -> Impo
 def export_participants_template(db_session: Session) -> str:
     """Export a CSV template with all participants.
     
-    Format: userid,username,displayname,[add your columns here]
+    Format: userid,username,displayname,priority,tags,[add your columns here]
     
     Returns CSV string.
     """
@@ -174,7 +191,7 @@ def export_participants_template(db_session: Session) -> str:
     writer = csv.writer(output)
     
     # Header
-    writer.writerow(["userid", "username", "displayname", "notes", "[add_your_columns]"])
+    writer.writerow(["userid", "username", "displayname", "priority", "tags", "[add_your_columns]"])
     
     # Get all participants
     participants = db_session.execute(
@@ -182,11 +199,22 @@ def export_participants_template(db_session: Session) -> str:
     ).scalars().all()
     
     for p in participants:
+        # Parse tags JSON to comma-separated string
+        tags_str = ""
+        if p.tags:
+            try:
+                tags_list = json.loads(p.tags)
+                if isinstance(tags_list, list):
+                    tags_str = ",".join(tags_list)
+            except json.JSONDecodeError:
+                pass
+        
         writer.writerow([
             p.tg_user_id or "",
             p.username or "",
             p.display_name,
-            "",  # notes placeholder
+            p.priority or "medium",
+            tags_str,
             "",  # custom columns placeholder
         ])
     
@@ -197,7 +225,10 @@ def import_participants_metadata(db_session: Session, csv_content: str) -> Impor
     """Import participant metadata from CSV.
     
     The CSV must have 'userid' or 'username' column.
-    Other columns stored in custom_fields_json.
+    Other columns:
+    - priority (high/medium/low)
+    - tags (comma-separated list)
+    - Other columns stored in custom_fields_json
     
     Returns ImportResult.
     """
@@ -241,12 +272,29 @@ def import_participants_metadata(db_session: Session, csv_content: str) -> Impor
                 result.skipped_count += 1
                 continue
             
-            # Update notes if present
-            if "notes" in row and row["notes"].strip():
-                # Store notes in custom_fields_json since Participant doesn't have notes column
-                pass
+            # Update priority
+            if "priority" in row and row["priority"].strip():
+                priority = row["priority"].strip().lower()
+                if priority in ("high", "medium", "low"):
+                    participant.priority = priority
             
-            # Collect custom fields
+            # Update relationship type (legacy support -> tags)
+            legacy_relationship = None
+            if "relationship" in row and row["relationship"].strip():
+                legacy_relationship = row["relationship"].strip()
+            
+            # Handle tags - parse comma-separated to JSON array
+            if "tags" in row:
+                tags_str = row["tags"].strip()
+                if tags_str:
+                    tags_list = [t.strip() for t in tags_str.split(",") if t.strip()]
+                    if legacy_relationship:
+                        tags_list.append(legacy_relationship)
+                    participant.tags = json.dumps(list(set(tags_list))) if tags_list else None
+                else:
+                    participant.tags = json.dumps([legacy_relationship]) if legacy_relationship else None
+            
+            # Collect custom fields (non-reserved columns)
             custom_fields = {}
             for key, value in row.items():
                 key_lower = key.lower().strip()

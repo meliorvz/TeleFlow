@@ -14,6 +14,7 @@ DEFAULT_SYSTEM_PROMPT = """You analyze Telegram conversations for urgency and pr
 INPUT: You receive:
 - The inbox owner's identity (username, first_name) - this is whose inbox you're analyzing
 - A batch of conversations, each with metadata and recent unread messages
+- For group chats, you may also receive participant information (priority, tags)
 
 OUTPUT: Return a JSON array with one object per conversation:
 [{
@@ -25,7 +26,7 @@ OUTPUT: Return a JSON array with one object per conversation:
 }]
 
 SCORING GUIDELINES:
-- 80-100: Requires immediate response (explicit deadlines, VIP sender, urgent keywords, DIRECT MENTIONS of inbox owner)
+- 80-100: Requires immediate response (explicit deadlines, high priority tag, urgent keywords, DIRECT MENTIONS of inbox owner)
 - 50-79: Should review soon (work matters, direct questions, action items)
 - 20-49: Can wait (casual conversation, informational, FYI messages)
 - 0-19: Low priority (spam, marketing, broadcasts, old discussions)
@@ -33,10 +34,11 @@ SCORING GUIDELINES:
 Critical factors (in order of importance):
 1. **Direct mentions of inbox owner** - In group chats, if someone @mentions or directly addresses the inbox owner by username or name, boost urgency by 25-40 points. This is HIGH PRIORITY.
 2. **Replies to inbox owner's messages** - If the message is a reply to something the inbox owner said, boost urgency by 15-25 points.
-3. Sender importance (VIP flag, team members)
-4. Time sensitivity (deadlines, "ASAP", "urgent")
-5. Business/personal impact
-6. Whether a response is expected
+3. **Conversation tags** - Tags like "High" indicate high priority. Tags like "Work", "BD", "Legal" suggest business importance.
+4. **Participant context** - Messages from colleagues or high-priority contacts are more important. Check participant priority and tags.
+5. Time sensitivity (deadlines, "ASAP", "urgent")
+6. Business/personal impact
+7. Whether a response is expected
 """
 
 
@@ -58,9 +60,10 @@ class ConversationContext:
     display_name: str
     username: str | None
     priority: str
-    is_vip: bool
+    tags: list[str]  # ["Work", "BD", "High"]
     custom_fields: dict
     messages: list[dict]  # [{sender, text, date}]
+    participants: list[dict] | None = None  # For groups: [{name, priority, tags}]
 
 
 class LLMClient:
@@ -96,11 +99,14 @@ class LLMClient:
                 "display_name": conv.display_name,
                 "username": conv.username,
                 "priority": conv.priority,
-                "is_vip": conv.is_vip,
+                "tags": conv.tags,
             }
             
             if conv.custom_fields:
                 item["custom_fields"] = conv.custom_fields
+            
+            if conv.participants:
+                item["participants"] = conv.participants
             
             item["messages"] = conv.messages
             conv_data.append(item)

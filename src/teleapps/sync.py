@@ -236,7 +236,127 @@ async def sync_messages_for_conversation(
         )
         db_session.add(message)
         new_count += 1
+        
+        # Also create/update participant from message sender
+        if sender_id and sender_name and conversation.tg_type in ("group", "channel"):
+            existing_participant = db_session.execute(
+                select(Participant).where(Participant.tg_user_id == sender_id)
+            ).scalar_one_or_none()
+            
+            if not existing_participant:
+                # Create new participant
+                participant = Participant(
+                    tg_user_id=sender_id,
+                    display_name=sender_name,
+                    username=getattr(msg.sender, "username", None),
+                )
+                db_session.add(participant)
+                db_session.flush()  # Get the participant_id
+                existing_participant = participant
+            
+            # Link participant to conversation if not already linked
+            link_exists = db_session.execute(
+                select(ConversationParticipant).where(
+                    ConversationParticipant.conversation_uuid == conversation.conversation_uuid,
+                    ConversationParticipant.participant_id == existing_participant.participant_id
+                )
+            ).scalar_one_or_none()
+            
+            if not link_exists:
+                link = ConversationParticipant(
+                    conversation_uuid=conversation.conversation_uuid,
+                    participant_id=existing_participant.participant_id,
+                )
+                db_session.add(link)
     
     db_session.commit()
     return new_count
+
+
+async def sync_participants_for_group(
+    tg_client: TelegramClientWrapper,
+    db_session: Session,
+    conversation: Conversation,
+    limit: int = 200,
+    on_progress: callable = None,
+) -> int:
+    """Sync participants for a group/channel conversation.
+    
+    Args:
+        tg_client: Connected Telegram client
+        db_session: Database session
+        conversation: Group/channel conversation to sync participants for
+        limit: Max number of participants to fetch
+        on_progress: Optional callback(current, total, message)
+    
+    Returns the number of participants synced.
+    """
+    if conversation.tg_type not in ("group", "channel"):
+        return 0
+    
+    rate_limiter = get_rate_limiter()
+    
+    # Get entity
+    entity = await tg_client.get_entity(conversation.tg_id)
+    
+    # Fetch participants
+    try:
+        participants = await rate_limiter.execute(
+            tg_client.get_participants(entity, limit=limit)
+        )
+    except Exception as e:
+        # May fail for channels we don't have admin rights for
+        print(f"Could not fetch participants for {conversation.display_name}: {e}")
+        return 0
+    
+    count = 0
+    total = len(participants)
+    
+    for i, p in enumerate(participants):
+        if not p or not p.id:
+            continue
+        
+        # Find or create participant
+        existing = db_session.execute(
+            select(Participant).where(Participant.tg_user_id == p.id)
+        ).scalar_one_or_none()
+        
+        if existing:
+            # Update display name if changed
+            new_name = f"{p.first_name or ''} {p.last_name or ''}".strip() or "Unknown"
+            if existing.display_name != new_name:
+                existing.display_name = new_name
+            if p.username and existing.username != p.username:
+                existing.username = p.username
+            participant = existing
+        else:
+            participant = Participant(
+                tg_user_id=p.id,
+                display_name=f"{p.first_name or ''} {p.last_name or ''}".strip() or "Unknown",
+                username=p.username,
+            )
+            db_session.add(participant)
+            db_session.flush()
+        
+        # Create link if doesn't exist
+        link_exists = db_session.execute(
+            select(ConversationParticipant).where(
+                ConversationParticipant.conversation_uuid == conversation.conversation_uuid,
+                ConversationParticipant.participant_id == participant.participant_id
+            )
+        ).scalar_one_or_none()
+        
+        if not link_exists:
+            link = ConversationParticipant(
+                conversation_uuid=conversation.conversation_uuid,
+                participant_id=participant.participant_id,
+            )
+            db_session.add(link)
+            count += 1
+        
+        if on_progress:
+            on_progress(i + 1, total, f"Syncing participant: {participant.display_name}")
+    
+    db_session.commit()
+    return count
 

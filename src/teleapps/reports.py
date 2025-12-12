@@ -150,13 +150,21 @@ async def generate_report(
             except json.JSONDecodeError:
                 pass
         
+        # Parse tags
+        tags = []
+        if meta and meta.tags:
+            try:
+                tags = json.loads(meta.tags)
+            except json.JSONDecodeError:
+                pass
+        
         contexts.append(ConversationContext(
             conversation_id=conv.conversation_uuid,
             tg_type=conv.tg_type,
             display_name=conv.display_name,
             username=conv.username,
             priority=meta.priority if meta else "medium",
-            is_vip=meta.is_vip if meta else False,
+            tags=tags,
             custom_fields=custom_fields,
             messages=message_data,
         ))
@@ -414,11 +422,20 @@ async def generate_simple_report(
         # Calculate urgency based on simple rules
         has_mention = any(m.mentions_owner for m in messages)
         has_reply = any(m.reply_to_msg_id is not None for m in messages)
-        is_vip = meta.is_vip if meta else False
         is_dm = conv.tg_type == "user"
         
+        # Parse tags
+        tags = []
+        if meta and meta.tags:
+            try:
+                tags = json.loads(meta.tags)
+            except json.JSONDecodeError:
+                pass
+        
+        has_high_tag = "High" in tags
+        
         # Scoring logic:
-        # - VIP bonus: +20
+        # - High tag bonus: +20
         # - DM (direct message): +15
         # - Has @mention of owner: +50 (this is the key signal for groups)
         # - Has reply: +25
@@ -427,9 +444,9 @@ async def generate_simple_report(
         urgency_score = 20  # Base
         reasoning_parts = []
         
-        if is_vip:
+        if has_high_tag:
             urgency_score += 20
-            reasoning_parts.append("VIP contact")
+            reasoning_parts.append("High priority tag")
         
         if is_dm:
             urgency_score += 15

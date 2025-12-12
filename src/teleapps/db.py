@@ -80,6 +80,7 @@ def _run_migrations(engine):
     This handles upgrades for existing databases.
     """
     from sqlalchemy import text, inspect
+    from .config import get_config
     
     inspector = inspect(engine)
     
@@ -101,6 +102,21 @@ def _run_migrations(engine):
                     "ALTER TABLE messages ADD COLUMN mentions_owner BOOLEAN DEFAULT 0"
                 ))
                 conn.commit()
+    
+    # Run VIP to tags migration
+    from .migrate_vip_to_tags import run_migration, check_migration_needed
+    
+    config = get_config()
+    db_path = str(config.db_path)
+    
+    if check_migration_needed(db_path):
+        result = run_migration(db_path)
+        if result.get("status") == "completed":
+            migrated = result.get("vip_migrated_count", 0)
+            if migrated > 0:
+                print(f"Migrated {migrated} VIP conversations to 'High' tag")
+            if result.get("participant_columns_added"):
+                print(f"Added participant columns: {result['participant_columns_added']}")
 
 
 @contextmanager

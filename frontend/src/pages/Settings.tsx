@@ -267,6 +267,16 @@ export function SettingsPage({ status, onRefresh }: SettingsPageProps) {
                             </p>
                         )}
                     </div>
+
+                    <Separator />
+
+                    <div className="space-y-2">
+                        <Label>Max Participants Per Group</Label>
+                        <p className="text-sm text-muted-foreground">
+                            Limit how many participants to sync from each group chat. Lower values improve performance.
+                            This can be configured in config.env with SYNC_MAX_PARTICIPANTS_PER_GROUP (default: 100).
+                        </p>
+                    </div>
                 </CardContent>
             </Card>
 

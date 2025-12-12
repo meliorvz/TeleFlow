@@ -11,7 +11,7 @@ from sqlalchemy import select
 
 from ..config import get_config, Config
 from ..db import get_session, init_db
-from ..models import Conversation, ConversationMetadata, Message, Report, UserState
+from ..models import Conversation, ConversationMetadata, Message, Report, UserState, Participant, ConversationParticipant
 from ..telegram_client import TelegramClientWrapper
 from ..llm import get_llm_client
 from ..sync import sync_dialogs
@@ -270,7 +270,9 @@ async def auth_2fa(request: PasswordRequest):
 
 @router.post("/sync")
 async def trigger_sync(background_tasks: BackgroundTasks):
-    """Trigger a dialog sync."""
+    """Trigger a dialog and participant sync."""
+    from ..sync import sync_participants_for_group
+    
     job_manager = get_job_manager()
     job = job_manager.create_job(JobType.SYNC)
     
@@ -279,16 +281,96 @@ async def trigger_sync(background_tasks: BackgroundTasks):
             job.status = JobStatus.RUNNING
             client = await get_tg_client()
             
+            # Phase 1: Sync dialogs
             with get_session() as session:
                 result = await sync_dialogs(
                     client, session,
-                    on_progress=lambda c, t, m: job_manager.update_progress(job.id, c, t, m)
+                    on_progress=lambda c, t, m: job_manager.update_progress(job.id, c, t, f"Dialogs: {m}")
                 )
+            
+            # Phase 2: Sync participants from SMALL groups only (not channels, not large groups)
+            # This prevents performance issues with large channels that have thousands of members
+            participants_synced = 0
+            
+            # Get config for max participants per group
+            from ..config import get_config
+            config = get_config()
+            max_participants = getattr(config, 'sync_max_participants_per_group', 100)
+            
+            # Calculate 6-month cutoff
+            from datetime import timedelta
+            six_months_ago = datetime.utcnow() - timedelta(days=180)
+            
+            with get_session() as session:
+                # Sync participants from groups and 1:1 private chats (not channels)
+                conversations = session.execute(
+                    select(Conversation).where(
+                        Conversation.tg_type.in_(["group", "private"])  # Groups and 1:1 chats, not channels
+                    )
+                ).scalars().all()
+                
+                # Filter: only conversations with activity in the last 6 months
+                active_convs = [
+                    c for c in conversations 
+                    if c.last_message_date and c.last_message_date > six_months_ago
+                ]
+                
+                total_convs = len(active_convs)
+                for i, conv in enumerate(active_convs):
+                    try:
+                        job_manager.update_progress(
+                            job.id, i + 1, total_convs, 
+                            f"Participants: {conv.display_name}"
+                        )
+                        
+                        if conv.tg_type == "private":
+                            # For 1:1 chats, create participant from the conversation itself
+                            existing = session.execute(
+                                select(Participant).where(Participant.tg_user_id == conv.tg_id)
+                            ).scalar_one_or_none()
+                            
+                            if not existing:
+                                participant = Participant(
+                                    tg_user_id=conv.tg_id,
+                                    display_name=conv.display_name,
+                                    username=conv.username,
+                                )
+                                session.add(participant)
+                                session.flush()
+                                existing = participant
+                                participants_synced += 1
+                            
+                            # Link to conversation if not linked
+                            link_exists = session.execute(
+                                select(ConversationParticipant).where(
+                                    ConversationParticipant.conversation_uuid == conv.conversation_uuid,
+                                    ConversationParticipant.participant_id == existing.participant_id
+                                )
+                            ).scalar_one_or_none()
+                            
+                            if not link_exists:
+                                link = ConversationParticipant(
+                                    conversation_uuid=conv.conversation_uuid,
+                                    participant_id=existing.participant_id,
+                                )
+                                session.add(link)
+                        else:
+                            # For groups, use the existing function
+                            count = await sync_participants_for_group(
+                                client, session, conv, limit=max_participants
+                            )
+                            participants_synced += count
+                    except Exception as e:
+                        # Continue even if one fails
+                        pass
+                
+                session.commit()
             
             job_manager.complete_job(job.id, {
                 "new": result.new_count,
                 "updated": result.updated_count,
                 "unchanged": result.unchanged_count,
+                "participants_synced": participants_synced,
             })
         except Exception as e:
             job_manager.fail_job(job.id, str(e))
@@ -301,7 +383,7 @@ async def trigger_sync(background_tasks: BackgroundTasks):
 
 class ConversationFilter(BaseModel):
     priority: str | None = None
-    is_vip: bool | None = None
+    tag: str | None = None  # Filter by a specific tag
     unread_only: bool = False
     search: str | None = None
     limit: int = 50
@@ -311,7 +393,7 @@ class ConversationFilter(BaseModel):
 @router.get("/conversations")
 async def list_conversations(
     priority: str | None = None,
-    is_vip: bool | None = None,
+    tag: str | None = None,
     unread_only: bool = False,
     search: str | None = None,
     limit: int = 50,
@@ -330,8 +412,9 @@ async def list_conversations(
         if priority:
             query = query.where(ConversationMetadata.priority == priority)
         
-        if is_vip is not None:
-            query = query.where(ConversationMetadata.is_vip == is_vip)
+        if tag:
+            # Filter by tag - check if tag exists in JSON array
+            query = query.where(ConversationMetadata.tags.like(f'%"{tag}"%'))
         
         if search:
             query = query.where(
@@ -346,6 +429,15 @@ async def list_conversations(
         
         conversations = []
         for conv, meta in results:
+            # Parse tags
+            tags = []
+            if meta and meta.tags:
+                try:
+                    tags = json.loads(meta.tags)
+                except:
+                    pass
+            
+            # Parse custom fields
             custom_fields = {}
             if meta and meta.custom_fields_json:
                 try:
@@ -363,7 +455,7 @@ async def list_conversations(
                 "last_message_date": conv.last_message_date.isoformat() if conv.last_message_date else None,
                 "last_message_preview": conv.last_message_preview,
                 "priority": meta.priority if meta else "medium",
-                "is_vip": meta.is_vip if meta else False,
+                "tags": tags,
                 "muted": meta.muted_in_teleapps if meta else False,
                 "notes": meta.notes if meta else None,
                 "custom_fields": custom_fields,
@@ -374,7 +466,7 @@ async def list_conversations(
 
 class MetadataUpdate(BaseModel):
     priority: str | None = None
-    is_vip: bool | None = None
+    tags: list[str] | None = None  # Full replacement of tags
     muted: bool | None = None
     notes: str | None = None
 
@@ -403,8 +495,8 @@ async def update_conversation_metadata(uuid: str, update: MetadataUpdate):
         
         if update.priority is not None:
             meta.priority = update.priority
-        if update.is_vip is not None:
-            meta.is_vip = update.is_vip
+        if update.tags is not None:
+            meta.tags = json.dumps(update.tags) if update.tags else None
         if update.muted is not None:
             meta.muted_in_teleapps = update.muted
         if update.notes is not None:
@@ -463,6 +555,289 @@ async def send_reply(uuid: str, request: ReplyRequest):
             return {"status": "sent"}
         except Exception as e:
             raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/conversations/tags")
+async def get_conversation_tags():
+    """Get all unique tags used in conversations (for autocomplete)."""
+    with get_session() as session:
+        all_metas = session.execute(
+            select(ConversationMetadata).where(ConversationMetadata.tags.isnot(None))
+        ).scalars().all()
+        
+        all_tags = set()
+        for meta in all_metas:
+            if meta.tags:
+                try:
+                    tags = json.loads(meta.tags)
+                    all_tags.update(tags)
+                except json.JSONDecodeError:
+                    pass
+        
+        # Add suggested defaults
+        suggestions = ["Work", "Personal", "BD", "Legal", "Product", "Info", "High"]
+        for s in suggestions:
+            all_tags.add(s)
+        
+        return {"tags": sorted(all_tags)}
+
+
+# --- Participants ---
+
+@router.get("/participants")
+async def list_participants(
+    priority: str | None = None,
+    tag: str | None = None,
+    search: str | None = None,
+    limit: int = 100,
+    offset: int = 0,
+):
+    """List all participants with filters."""
+    with get_session() as session:
+        query = select(Participant)
+        
+        if priority:
+            query = query.where(Participant.priority == priority)
+        
+        if tag:
+            query = query.where(Participant.tags.like(f'%"{tag}"%'))
+        
+        if search:
+            query = query.where(
+                Participant.display_name.ilike(f"%{search}%") |
+                Participant.username.ilike(f"%{search}%")
+            )
+        
+        query = query.order_by(Participant.display_name).limit(limit).offset(offset)
+        
+        participants = session.execute(query).scalars().all()
+        
+        result = []
+        for p in participants:
+            # Parse tags
+            tags = []
+            if p.tags:
+                try:
+                    tags = json.loads(p.tags)
+                except:
+                    pass
+            
+            # Count shared groups
+            shared_count = session.execute(
+                select(ConversationParticipant).where(
+                    ConversationParticipant.participant_id == p.participant_id
+                )
+            ).scalars().all()
+            
+            result.append({
+                "id": p.participant_id,
+                "tg_user_id": p.tg_user_id,
+                "display_name": p.display_name,
+                "username": p.username,
+                "priority": p.priority or "medium",
+                "tags": tags,
+                "shared_groups_count": len(shared_count),
+            })
+        
+        return {"participants": result}
+
+
+@router.get("/participants/ranked")
+async def get_ranked_participants(limit: int = 50):
+    """Get participants ranked by number of shared groups."""
+    from sqlalchemy import func
+    
+    with get_session() as session:
+        # Count groups per participant
+        subquery = (
+            select(
+                ConversationParticipant.participant_id,
+                func.count(ConversationParticipant.conversation_uuid).label("group_count")
+            )
+            .group_by(ConversationParticipant.participant_id)
+            .subquery()
+        )
+        
+        query = (
+            select(Participant, subquery.c.group_count)
+            .outerjoin(subquery, Participant.participant_id == subquery.c.participant_id)
+            .order_by(subquery.c.group_count.desc().nulls_last())
+            .limit(limit)
+        )
+        
+        results = session.execute(query).all()
+        
+        participants = []
+        for p, group_count in results:
+            tags = []
+            if p.tags:
+                try:
+                    tags = json.loads(p.tags)
+                except:
+                    pass
+            
+            participants.append({
+                "id": p.participant_id,
+                "tg_user_id": p.tg_user_id,
+                "display_name": p.display_name,
+                "username": p.username,
+                "priority": p.priority or "medium",
+                "tags": tags,
+                "shared_groups_count": group_count or 0,
+            })
+        
+        return {"participants": participants}
+
+
+@router.get("/participants/tags")
+async def get_participant_tags():
+    """Get all unique tags used for participants (for autocomplete)."""
+    with get_session() as session:
+        all_participants = session.execute(
+            select(Participant).where(Participant.tags.isnot(None))
+        ).scalars().all()
+        
+        all_tags = set()
+        for p in all_participants:
+            if p.tags:
+                try:
+                    tags = json.loads(p.tags)
+                    all_tags.update(tags)
+                except json.JSONDecodeError:
+                    pass
+        
+        # Add suggested defaults for participants, including former relationship types
+        suggestions = ["Colleague", "Partner", "Investor", "Client", "Friend", "Product", "Engineering", "BD", "Legal", "CEO", "Founder"]
+        for s in suggestions:
+            all_tags.add(s)
+        
+        return {"tags": sorted(all_tags)}
+
+
+class ParticipantUpdate(BaseModel):
+    priority: str | None = None
+    tags: list[str] | None = None
+
+
+@router.patch("/participants/{participant_id}")
+async def update_participant(participant_id: int, update: ParticipantUpdate):
+    """Update participant metadata."""
+    with get_session() as session:
+        participant = session.execute(
+            select(Participant).where(Participant.participant_id == participant_id)
+        ).scalar_one_or_none()
+        
+        if not participant:
+            raise HTTPException(status_code=404, detail="Participant not found")
+        
+        if update.priority is not None:
+            participant.priority = update.priority
+        if update.tags is not None:
+            participant.tags = json.dumps(update.tags) if update.tags else None
+        
+        session.commit()
+        
+        return {"status": "updated"}
+
+
+@router.post("/participants/sync")
+async def sync_participants(background_tasks: BackgroundTasks):
+    """Sync participants for all group/channel conversations."""
+    from ..sync import sync_participants_for_group
+    
+    job_manager = get_job_manager()
+    job = job_manager.create_job(JobType.SYNC)
+    
+    async def run_sync():
+        try:
+            job.status = JobStatus.RUNNING
+            client = await get_tg_client()
+            
+            with get_session() as session:
+                # Get all group/channel conversations
+                groups = session.execute(
+                    select(Conversation).where(
+                        Conversation.tg_type.in_(["group", "channel"])
+                    )
+                ).scalars().all()
+                
+                total = len(groups)
+                synced = 0
+                
+                for i, group in enumerate(groups):
+                    try:
+                        count = await sync_participants_for_group(
+                            client, session, group, limit=100
+                        )
+                        synced += count
+                        job_manager.update_progress(
+                            job.id, i + 1, total, 
+                            f"Synced {count} from {group.display_name}"
+                        )
+                    except Exception as e:
+                        print(f"Error syncing {group.display_name}: {e}")
+            
+            job_manager.complete_job(job.id, {"synced": synced})
+        except Exception as e:
+            job_manager.fail_job(job.id, str(e))
+    
+    background_tasks.add_task(run_sync)
+    return {"job_id": job.id}
+
+
+class BatchTagUpdate(BaseModel):
+    conversation_uuids: list[str]
+    tag: str
+    action: str = "add"  # "add" or "remove"
+
+
+@router.post("/conversations/batch-tag")
+async def batch_update_tag(update: BatchTagUpdate):
+    """Add or remove a tag from multiple conversations."""
+    with get_session() as session:
+        updated = 0
+        
+        for uuid in update.conversation_uuids:
+            meta = session.execute(
+                select(ConversationMetadata).where(
+                    ConversationMetadata.conversation_uuid == uuid
+                )
+            ).scalar_one_or_none()
+            
+            if not meta:
+                # Create metadata if doesn't exist
+                conv = session.execute(
+                    select(Conversation).where(Conversation.conversation_uuid == uuid)
+                ).scalar_one_or_none()
+                
+                if not conv:
+                    continue
+                
+                meta = ConversationMetadata(conversation_uuid=uuid, priority="medium")
+                session.add(meta)
+            
+            # Parse existing tags
+            current_tags = []
+            if meta.tags:
+                try:
+                    current_tags = json.loads(meta.tags)
+                except json.JSONDecodeError:
+                    current_tags = []
+            
+            if update.action == "add":
+                if update.tag not in current_tags:
+                    current_tags.append(update.tag)
+                    meta.tags = json.dumps(current_tags)
+                    updated += 1
+            elif update.action == "remove":
+                if update.tag in current_tags:
+                    current_tags.remove(update.tag)
+                    meta.tags = json.dumps(current_tags) if current_tags else None
+                    updated += 1
+        
+        session.commit()
+        
+        return {"status": "updated", "updated_count": updated}
 
 
 # --- CSV Import/Export ---
@@ -591,7 +966,7 @@ async def trigger_report_generation(background_tasks: BackgroundTasks):
     """Generate a new report.
     
     Uses LLM-based analysis if configured, otherwise falls back to
-    simple rule-based prioritization (mentions, replies, VIP status).
+    simple rule-based prioritization (mentions, replies, High tag).
     """
     config = get_config()
     

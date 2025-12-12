@@ -9,7 +9,8 @@ import {
   Settings,
   RefreshCw,
   CheckCheck,
-  Loader2
+  Loader2,
+  Users
 } from 'lucide-react'
 import { getStatus, triggerSync, markCaughtUp, checkConfig } from '@/lib/api'
 import type { Status, Job } from '@/lib/types'
@@ -17,6 +18,7 @@ import { SetupWizard } from '@/components/SetupWizard'
 import { AuthDialog } from '@/components/AuthDialog'
 import { Dashboard } from '@/pages/Dashboard'
 import { Conversations } from '@/pages/Conversations'
+import { Participants } from '@/pages/Participants'
 import { Reports } from '@/pages/Reports'
 import { BulkSend } from '@/pages/BulkSend'
 import { SettingsPage } from '@/pages/Settings'
@@ -208,6 +210,10 @@ function App() {
               <MessageSquare className="h-4 w-4" />
               Conversations
             </TabsTrigger>
+            <TabsTrigger value="participants" className="gap-2">
+              <Users className="h-4 w-4" />
+              Participants
+            </TabsTrigger>
             <TabsTrigger value="reports" className="gap-2">
               <FileText className="h-4 w-4" />
               Reports
@@ -229,6 +235,9 @@ function App() {
           </TabsContent>
           <TabsContent value="conversations" className="m-0 h-full">
             <Conversations />
+          </TabsContent>
+          <TabsContent value="participants" className="m-0 h-full">
+            <Participants />
           </TabsContent>
           <TabsContent value="reports" className="m-0 h-full">
             <Reports />
