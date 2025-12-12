@@ -740,6 +740,50 @@ async def update_participant(participant_id: int, update: ParticipantUpdate):
         return {"status": "updated"}
 
 
+class BatchParticipantTagUpdate(BaseModel):
+    participant_ids: list[int]
+    tag: str
+    action: str = "add"  # "add" or "remove"
+
+
+@router.post("/participants/batch-tag")
+async def batch_update_participant_tag(update: BatchParticipantTagUpdate):
+    """Add or remove a tag from multiple participants."""
+    with get_session() as session:
+        updated = 0
+        
+        for participant_id in update.participant_ids:
+            participant = session.execute(
+                select(Participant).where(Participant.participant_id == participant_id)
+            ).scalar_one_or_none()
+            
+            if not participant:
+                continue
+            
+            # Parse existing tags
+            current_tags = []
+            if participant.tags:
+                try:
+                    current_tags = json.loads(participant.tags)
+                except json.JSONDecodeError:
+                    current_tags = []
+            
+            if update.action == "add":
+                if update.tag not in current_tags:
+                    current_tags.append(update.tag)
+                    participant.tags = json.dumps(current_tags)
+                    updated += 1
+            elif update.action == "remove":
+                if update.tag in current_tags:
+                    current_tags.remove(update.tag)
+                    participant.tags = json.dumps(current_tags) if current_tags else None
+                    updated += 1
+        
+        session.commit()
+        
+        return {"status": "updated", "updated_count": updated}
+
+
 @router.post("/participants/sync")
 async def sync_participants(background_tasks: BackgroundTasks):
     """Sync participants for all group/channel conversations."""

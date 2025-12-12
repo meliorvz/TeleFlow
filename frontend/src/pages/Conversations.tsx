@@ -238,17 +238,45 @@ export function Conversations() {
                     >
                         Unread
                     </Button>
-                    <Button
-                        variant={filters.tag === 'High' ? 'default' : 'outline'}
-                        size="sm"
-                        onClick={() => setFilters(f => ({
-                            ...f,
-                            tag: f.tag === 'High' ? '' : 'High'
-                        }))}
-                    >
-                        <Tag className="h-4 w-4 mr-1" />
-                        High
-                    </Button>
+                    <div className="flex items-center border rounded-md overflow-hidden ml-auto">
+                        {PRIORITY_OPTIONS.map((option) => {
+                            const optionLower = option.toLowerCase()
+                            const isSelected = filters.priority === optionLower
+                            let variant: "default" | "secondary" | "destructive" | "outline" = "outline"
+                            let className = "h-7 rounded-none px-3 text-xs font-normal cursor-pointer hover:bg-muted"
+
+                            if (isSelected) {
+                                className += " font-medium"
+                                if (option === 'High') {
+                                    variant = "destructive"
+                                    className += " hover:bg-destructive hover:text-destructive-foreground"
+                                } else if (option === 'Medium') {
+                                    variant = "secondary"
+                                    className += " bg-secondary hover:bg-secondary/80"
+                                } else {
+                                    variant = "outline"
+                                    className += " bg-background hover:bg-accent"
+                                }
+                            } else {
+                                variant = "outline"
+                                className += " text-muted-foreground hover:text-foreground"
+                            }
+
+                            return (
+                                <Badge
+                                    key={option}
+                                    variant={isSelected ? variant : "outline"}
+                                    className={`${className} ${isSelected ? '' : 'border-transparent bg-transparent'}`}
+                                    onClick={() => setFilters(f => ({
+                                        ...f,
+                                        priority: f.priority === optionLower ? '' : optionLower
+                                    }))}
+                                >
+                                    {option}
+                                </Badge>
+                            )
+                        })}
+                    </div>
                 </div>
                 {/* Tag quick filters */}
                 <div className="flex items-center gap-2 flex-wrap">
@@ -453,15 +481,15 @@ export function Conversations() {
 
             {/* Bulk Add Dialog */}
             <Dialog open={showBulkAddDialog} onOpenChange={setShowBulkAddDialog}>
-                <DialogContent className="max-w-2xl max-h-[80vh] flex flex-col">
-                    <DialogHeader>
+                <DialogContent className="max-w-2xl max-h-[80vh] overflow-hidden flex flex-col">
+                    <DialogHeader className="flex-shrink-0">
                         <DialogTitle>
                             Add Conversations to "{filters.tag}"
                         </DialogTitle>
                     </DialogHeader>
 
-                    <div className="flex-1 flex flex-col gap-4 overflow-hidden min-h-0">
-                        <div className="relative">
+                    <div className="flex-1 flex flex-col gap-4 min-h-0 overflow-hidden">
+                        <div className="relative flex-shrink-0">
                             <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                             <Input
                                 placeholder="Search conversations..."
@@ -471,12 +499,12 @@ export function Conversations() {
                             />
                         </div>
 
-                        <p className="text-sm text-muted-foreground">
+                        <p className="text-sm text-muted-foreground flex-shrink-0">
                             Select conversations to add the "{filters.tag}" tag.
                             Conversations already tagged are hidden.
                         </p>
 
-                        <ScrollArea className="flex-1 border rounded-md">
+                        <div className="flex-1 min-h-0 border rounded-md overflow-y-auto">
                             <div className="grid grid-cols-2 md:grid-cols-3 gap-2 p-4">
                                 {allConversations.length === 0 ? (
                                     <div className="col-span-full text-center py-8 text-muted-foreground">
@@ -513,9 +541,9 @@ export function Conversations() {
                                     ))
                                 )}
                             </div>
-                        </ScrollArea>
+                        </div>
 
-                        <div className="flex items-center justify-between pt-2">
+                        <div className="flex items-center justify-between pt-2 flex-shrink-0">
                             <span className="text-sm text-muted-foreground">
                                 {selectedForBulk.size} selected
                             </span>
