@@ -1,5 +1,5 @@
 [project]
-name = "teleapps"
+name = "teleflow"
 version = "0.1.0"
 description = "Local-only Telegram triage and bulk messaging assistant"
 requires-python = ">=3.10"
@@ -16,7 +16,7 @@ dependencies = [
 ]
 
 [project.scripts]
-teleapps = "teleapps.main:run"
+teleflow = "teleflow.main:run"
 
 [build-system]
 requires = ["setuptools>=61.0"]

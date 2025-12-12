@@ -1,152 +1,205 @@
-# Teleapps
+# TeleFlow
 
-Local-only Telegram triage and bulk messaging assistant, optimized for 1000+ chats with privacy-first design.
+**A local-first Telegram assistant for managing 1,000+ conversations with AI-powered prioritization.**
 
-## Features
+TeleFlow helps busy professionals triage their Telegram inbox by syncing conversations locally, generating AI-powered priority reports, and enabling bulk messaging—all while keeping your data private and under your control.
 
-- **Conversation Sync**: Import all your Telegram dialogs locally
-- **LLM-Powered Reports**: Generate urgency-ranked triage reports using OpenRouter
-- **Bulk Messaging**: Send templated messages to multiple conversations with safety guards
-- **CSV Import/Export**: Manage conversation categories and metadata via spreadsheets
-- **Web Interface**: Non-technical friendly browser-based UI
+## ✨ Features
 
-## Privacy
+### 📊 Dashboard & Reports
+- AI-generated triage reports that rank conversations by urgency
+- Click into any conversation to view recent messages and draft responses
+- Configurable report generation parameters
 
-Teleapps is designed for privacy-conscious users:
+### 💬 Conversation Management
+- Full-text search across all conversations
+- Priority tagging (High / Medium / Low)
+- Custom tags for organization
+- Inline message preview and quick reply
 
-- **No cloud storage**: All data stored locally in SQLite
-- **No analytics**: Zero tracking or telemetry
-- **Minimal network**: Only connects to:
-  - Telegram (MTProto via Telethon)
-  - OpenRouter (optional, for LLM features)
-- **Auditable dependencies**: All packages pinned to exact versions
+### 👥 Participant Tracking
+- View and manage contacts across all conversations
+- Tag participants for easy filtering
+- Sync participant details from group chats
 
-### Files Created
+### 📤 Bulk Messaging
+- Send templated messages to multiple conversations
+- Personalization tokens: `{{display_name}}`, `{{first_name}}`, `{{username}}`
+- Built-in rate limiting and safety confirmations
+
+### 📁 Import & Export
+- CSV export/import for conversations and participants
+- Manage metadata in spreadsheets
+
+### ⚙️ Flexible Configuration
+- **Dual LLM support**: [OpenRouter](https://openrouter.ai) or [Venice AI](https://venice.ai) (privacy-focused)
+- Configurable auto-sync intervals
+- Advanced report tuning options
+
+---
+
+## 🔒 Privacy First
+
+TeleFlow is designed for privacy-conscious users:
+
+| Principle | Implementation |
+|-----------|---------------|
+| **No cloud** | All data stored locally in SQLite |
+| **No analytics** | Zero tracking or telemetry |
+| **Minimal network** | Only connects to Telegram + your chosen LLM provider |
+| **Auditable** | Open source, pinned dependencies |
+
+### Local Files
+
+All user data is stored in the `localdata/` folder:
 
 | File | Purpose |
 |------|---------|
-| `teleapps.db` | SQLite database with conversations and metadata |
-| `teleapps.session` | Encrypted Telethon session file |
-| `teleapps.log` | Application logs |
+| `teleflow.db` | SQLite database with conversations and metadata |
+| `teleflow.session` | Encrypted Telegram session |
 | `config.env` | Your configuration (API keys, settings) |
 
-### How to Wipe
+### Complete Removal
 
-To completely remove Teleapps:
+To fully remove TeleFlow and revoke access:
 
-```bash
-rm -rf ~/Documents/teleapps/
-```
+1. Delete the app folder: `rm -rf ~/Documents/teleflow/`
+2. In Telegram: **Settings → Devices → Find "TeleFlow" → Terminate**
 
-Then revoke the session in Telegram: Settings → Devices → Find "Teleapps" → Terminate.
+---
 
-## Installation
+## 🚀 Quick Start
 
 ### Prerequisites
+- **macOS** (Windows/Linux: use manual setup)
+- **Python 3.10+**
+- **Telegram API credentials** from [my.telegram.org](https://my.telegram.org)
 
-- Python 3.10+
-- Telegram API credentials (get from https://my.telegram.org)
-
-### Setup
+### Installation
 
 ```bash
-# Clone or download to ~/Documents/teleapps
-cd ~/Documents/teleapps
+# Clone the repository
+git clone https://github.com/yourusername/teleflow.git ~/Documents/teleflow
+cd ~/Documents/teleflow
 
-# Create virtual environment
+# Copy the example config
+cp config.env.example localdata/config.env
+
+# Edit with your Telegram credentials
+nano localdata/config.env
+```
+
+### Running
+
+**Option 1: Double-click launcher (macOS)**
+- Double-click `TeleFlow.command`
+- The launcher handles virtual environment setup, dependencies, and browser opening automatically
+
+**Option 2: Manual**
+```bash
+# Create and activate virtual environment
 python3 -m venv .venv
 source .venv/bin/activate
 
 # Install dependencies
 pip install -r requirements.txt
 
-# Copy and edit config
-cp config.env.example config.env
-# Edit config.env with your TG_API_ID and TG_API_HASH
+# Run
+cd src
+python -m teleflow.main
 ```
 
-### Configure
+Then open [http://localhost:8080](http://localhost:8080)
 
-Edit `config.env`:
+### First-Time Setup
 
-```env
-# Required
-TG_API_ID=your_api_id
-TG_API_HASH=your_api_hash
+1. Enter your phone number when prompted
+2. Enter the verification code sent to Telegram
+3. (If enabled) Enter your 2FA password
+4. Click **Sync** to import your conversations
 
-# Optional: Enable LLM features
-OPENROUTER_API_KEY=your_openrouter_key
-```
+---
 
-### Run
+## ⚙️ Configuration
 
-```bash
-# Activate virtual environment
-source .venv/bin/activate
+Copy `config.env.example` to `localdata/config.env` and customize:
 
-# Start Teleapps
-python -m teleapps.main
-```
+### Core Settings
 
-Then open http://localhost:8080 in your browser.
-
-## Usage
-
-### First Time Setup
-
-1. Open the web UI
-2. Enter your phone number when prompted
-3. Enter the code sent to your Telegram
-4. (If enabled) Enter your 2FA password
-5. Click "Sync" to import your conversations
-
-### Generating Reports
-
-1. Ensure `OPENROUTER_API_KEY` is set in config.env
-2. Click "Generate New Report" on the Dashboard
-3. View prioritized conversations organized by urgency
-
-### Managing Categories
-
-1. Go to Import/Export
-2. Download the conversations template
-3. Edit the CSV to add columns (e.g., `category`, `team`, `project`)
-4. Upload the edited CSV
-
-### Bulk Sending
-
-1. Go to Bulk Send
-2. Select recipients
-3. Write your message template using tokens:
-   - `{{display_name}}` - Full name
-   - `{{first_name}}` - First name only
-   - `{{username}}` - @username
-4. Preview and confirm with the safety code
-
-## Configuration Reference
-
-| Setting | Default | Description |
-|---------|---------|-------------|
+| Variable | Default | Description |
+|----------|---------|-------------|
 | `TG_API_ID` | *required* | Telegram API ID |
 | `TG_API_HASH` | *required* | Telegram API Hash |
-| `OPENROUTER_API_KEY` | - | OpenRouter API key for LLM |
-| `LLM_MODEL` | `anthropic/claude-3.5-sonnet` | Model to use |
-| `BULK_SEND_MAX_PER_JOB` | `200` | Max recipients per bulk send |
-| `BULK_SEND_DELAY_SECONDS` | `10` | Delay between sends |
-| `REPORT_CADENCE` | `manual` | Report schedule (manual/daily/weekly) |
-| `WEB_PORT` | `8080` | Web server port |
+| `WEB_PORT` | `8080` | Local server port |
 
-## Development
+### LLM Configuration
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `LLM_PROVIDER` | `openrouter` | `openrouter` or `venice` |
+| `OPENROUTER_API_KEY` | — | [OpenRouter](https://openrouter.ai) API key |
+| `OPENROUTER_MODEL` | `deepseek/deepseek-v3.2` | Model to use |
+| `VENICE_API_KEY` | — | [Venice AI](https://venice.ai) API key |
+| `VENICE_MODEL` | `deepseek-v3.2` | Venice model |
+
+### Sync & Reports
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `SYNC_INTERVAL_MINUTES` | `10` | Auto-sync interval (0 = disabled) |
+| `REPORT_MESSAGE_LIMIT` | `20` | Messages per conversation in reports |
+| `REPORT_TEXT_TRUNCATION` | `500` | Max chars per message (0 = none) |
+| `LLM_CONVERSATION_MAX_AGE_DAYS` | `90` | Exclude older conversations from reports |
+
+### Bulk Send
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `BULK_SEND_MAX_PER_JOB` | `200` | Max recipients per job |
+| `BULK_SEND_DELAY_SECONDS` | `10` | Delay between messages |
+
+See `config.env.example` for the complete reference.
+
+---
+
+## 🛠️ Development
 
 ```bash
-# Install in development mode
+# Clone and setup
+git clone https://github.com/yourusername/teleflow.git
+cd teleflow
+python3 -m venv .venv
+source .venv/bin/activate
 pip install -e .
 
 # Run tests
 pip install pytest pytest-asyncio
 pytest tests/ -v
+
+# Frontend development
+cd frontend
+npm install
+npm run dev
 ```
 
-## License
+### Project Structure
+
+```
+teleflow/
+├── src/teleflow/          # Python backend (FastAPI)
+│   ├── api/               # REST API routes
+│   ├── sync.py            # Telegram sync logic
+│   ├── reports.py         # LLM report generation
+│   └── bulk_send.py       # Bulk messaging
+├── frontend/              # React frontend (Vite + TypeScript)
+│   └── src/pages/         # Dashboard, Conversations, etc.
+├── localdata/             # User data (gitignored contents)
+├── TeleFlow.command       # macOS launcher
+└── config.env.example     # Configuration template
+```
+
+---
+
+## 📄 License
 
 MIT

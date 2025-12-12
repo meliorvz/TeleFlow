@@ -174,7 +174,7 @@ if __name__ == "__main__":
     
     # Default to localdata directory
     script_dir = Path(__file__).parent
-    db_path = script_dir.parent.parent / "localdata" / "teleapps.db"
+    db_path = script_dir.parent.parent / "localdata" / "teleflow.db"
     
     if db_path.exists():
         print(f"Running migration on {db_path}")

@@ -272,7 +272,7 @@ export function SettingsPage({ status, onRefresh }: SettingsPageProps) {
                         Sync Settings
                     </CardTitle>
                     <CardDescription>
-                        Configure how often Teleapps syncs conversations from Telegram.
+                        Configure how often TeleFlow syncs conversations from Telegram.
                     </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-4">

@@ -1,4 +1,4 @@
-"""SQLAlchemy models for Teleapps."""
+"""SQLAlchemy models for TeleFlow."""
 
 from datetime import datetime
 from typing import Optional
@@ -52,7 +52,7 @@ class ConversationMetadata(Base):
     priority = Column(String(20), default="medium")  # high | medium | low
     notes = Column(Text, nullable=True)
     tags = Column(Text, nullable=True)  # JSON array: ["Work", "BD", "Legal"]
-    muted_in_teleapps = Column(Boolean, default=False)
+    muted_in_teleflow = Column(Boolean, default=False)
     custom_fields_json = Column(Text, nullable=True)  # JSON for CSV-imported columns
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     

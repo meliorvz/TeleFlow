@@ -1,4 +1,4 @@
-"""FastAPI routes for Teleapps."""
+"""FastAPI routes for TeleFlow."""
 
 import json
 from datetime import datetime
@@ -470,7 +470,7 @@ async def list_conversations(
                 "last_message_preview": conv.last_message_preview,
                 "priority": meta.priority if meta else "medium",
                 "tags": tags,
-                "muted": meta.muted_in_teleapps if meta else False,
+                "muted": meta.muted_in_teleflow if meta else False,
                 "notes": meta.notes if meta else None,
                 "custom_fields": custom_fields,
             })
@@ -512,7 +512,7 @@ async def update_conversation_metadata(uuid: str, update: MetadataUpdate):
         if update.tags is not None:
             meta.tags = json.dumps(update.tags) if update.tags else None
         if update.muted is not None:
-            meta.muted_in_teleapps = update.muted
+            meta.muted_in_teleflow = update.muted
         if update.notes is not None:
             meta.notes = update.notes
         

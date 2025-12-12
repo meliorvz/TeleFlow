@@ -151,7 +151,7 @@ def import_conversations_metadata(db_session: Session, csv_content: str) -> Impo
                 meta.notes = row["notes"].strip() or None
             
             if "muted" in row and row["muted"].strip():
-                meta.muted_in_teleapps = row["muted"].strip().lower() in ("true", "1", "yes")
+                meta.muted_in_teleflow = row["muted"].strip().lower() in ("true", "1", "yes")
             
             # Collect custom fields (non-reserved columns)
             custom_fields = {}

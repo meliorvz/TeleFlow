@@ -1,5 +1,7 @@
 # Local user data (contains sensitive Telegram session)
-localdata/
+# Track the folder but ignore contents except .gitkeep
+localdata/*
+!localdata/.gitkeep
 
 # Python
 __pycache__/

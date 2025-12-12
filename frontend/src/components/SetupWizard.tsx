@@ -56,7 +56,7 @@ export function SetupWizard({ onComplete }: SetupWizardProps) {
                     <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-primary text-3xl">
                         📱
                     </div>
-                    <CardTitle className="text-2xl">Welcome to Teleapps</CardTitle>
+                    <CardTitle className="text-2xl">Welcome to TeleFlow</CardTitle>
                     <CardDescription>
                         Let's get you set up. You'll need API credentials to connect to Telegram.
                     </CardDescription>

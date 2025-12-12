@@ -163,7 +163,7 @@ function App() {
               📱
             </div>
             <div>
-              <h1 className="text-xl font-bold">Teleapps</h1>
+              <h1 className="text-xl font-bold">TeleFlow</h1>
               <p className="text-xs text-muted-foreground">
                 {status?.conversations_count ?? 0} conversations • {status?.unread_count ?? 0} unread
               </p>

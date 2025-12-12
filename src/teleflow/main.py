@@ -1,4 +1,4 @@
-"""Main entry point for Teleapps."""
+"""Main entry point for TeleFlow."""
 
 import asyncio
 import uvicorn
@@ -17,7 +17,7 @@ from .api.websocket import router as ws_router
 def create_app() -> FastAPI:
     """Create and configure the FastAPI application."""
     app = FastAPI(
-        title="Teleapps",
+        title="TeleFlow",
         description="Local Telegram triage and bulk messaging assistant",
         version="0.1.0",
     )
@@ -65,7 +65,7 @@ def create_app() -> FastAPI:
             index_path = legacy_dir / "index.html"
             if index_path.exists():
                 return FileResponse(index_path)
-            return {"message": "Teleapps API", "docs": "/docs"}
+            return {"message": "TeleFlow API", "docs": "/docs"}
     
     @app.on_event("startup")
     async def startup():
@@ -136,7 +136,7 @@ def create_app() -> FastAPI:
 
 
 def run():
-    """Run the Teleapps server."""
+    """Run the TeleFlow server."""
     config = get_config()
     
     # Don't block on config validation - setup wizard handles this
@@ -151,7 +151,7 @@ def run():
     # Initialize database
     init_db(config)
     
-    print(f"\n🚀 Teleapps starting...")
+    print(f"\n🚀 TeleFlow starting...")
     print(f"   Web UI: http://{config.web_host}:{config.web_port}")
     print(f"   Data:   {config.data_dir}")
     print(f"   LLM:    {'Enabled' if config.llm_enabled else 'Disabled'}")

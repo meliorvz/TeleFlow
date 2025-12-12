@@ -12,7 +12,7 @@ from .config import Config, get_config
 
 
 class TelegramClientWrapper:
-    """Wrapper around Telethon for Teleapps operations."""
+    """Wrapper around Telethon for TeleFlow operations."""
     
     def __init__(self, config: Config | None = None):
         self.config = config or get_config()

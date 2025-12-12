@@ -169,7 +169,7 @@ export function AuthDialog({ open, onComplete }: AuthDialogProps) {
                             </div>
                             <p className="mt-1 text-muted-foreground">
                                 Your password is sent directly to Telegram's servers via encrypted MTProto.
-                                Teleapps never stores or logs your password.
+                                TeleFlow never stores or logs your password.
                             </p>
                         </div>
 

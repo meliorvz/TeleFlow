@@ -1,4 +1,4 @@
-"""Configuration management for Teleapps."""
+"""Configuration management for TeleFlow."""
 
 import os
 from pathlib import Path
@@ -60,15 +60,15 @@ class Config:
     
     @property
     def db_path(self) -> Path:
-        return self.data_dir / "teleapps.db"
+        return self.data_dir / "teleflow.db"
     
     @property
     def session_path(self) -> Path:
-        return self.data_dir / "teleapps.session"
+        return self.data_dir / "teleflow.session"
     
     @property
     def log_path(self) -> Path:
-        return self.data_dir / "teleapps.log"
+        return self.data_dir / "teleflow.log"
     
     @property
     def llm_enabled(self) -> bool:
@@ -101,7 +101,7 @@ class Config:
 def load_config(env_file: Path | None = None) -> Config:
     """Load configuration from environment variables and optional .env file."""
     
-    # App root directory (where Teleapps.command lives)
+    # App root directory (where TeleFlow.command lives)
     app_root = Path(__file__).parent.parent.parent
     localdata_dir = app_root / "localdata"
     

@@ -23,7 +23,7 @@ export default defineConfig({
     },
   },
   build: {
-    outDir: '../src/teleapps/static_react',
+    outDir: '../src/teleflow/static_react',
     emptyOutDir: true,
   },
 })

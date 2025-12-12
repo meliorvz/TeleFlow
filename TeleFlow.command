@@ -1,6 +1,6 @@
 #!/bin/bash
-# Teleapps Launcher for macOS
-# Double-click this file to start Teleapps
+# TeleFlow Launcher for macOS
+# Double-click this file to start TeleFlow
 
 # Get the directory where this script is located
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
@@ -14,7 +14,7 @@ NC='\033[0m' # No Color
 
 echo ""
 echo -e "${BLUE}╔════════════════════════════════════╗${NC}"
-echo -e "${BLUE}║${NC}         🚀 ${GREEN}Teleapps${NC}                ${BLUE}║${NC}"
+echo -e "${BLUE}║${NC}         🚀 ${GREEN}TeleFlow${NC}                ${BLUE}║${NC}"
 echo -e "${BLUE}╚════════════════════════════════════╝${NC}"
 echo ""
 
@@ -30,7 +30,7 @@ check_python() {
 if ! check_python; then
     echo -e "${YELLOW}Python 3 is not installed.${NC}"
     echo ""
-    echo "Teleapps requires Python 3 to run. On macOS, this is included"
+    echo "TeleFlow requires Python 3 to run. On macOS, this is included"
     echo "with the Command Line Tools."
     echo ""
     echo -e "${GREEN}Opening the Command Line Tools installer...${NC}"
@@ -42,7 +42,7 @@ if ! check_python; then
     echo ""
     echo -e "${YELLOW}After installation completes:${NC}"
     echo "  1. Close this Terminal window"
-    echo "  2. Double-click Teleapps.command again"
+    echo "  2. Double-click TeleFlow.command again"
     echo ""
     echo "Press any key to close..."
     read -n 1
@@ -105,12 +105,12 @@ echo ""
 (sleep 2 && open "http://127.0.0.1:8080") &
 
 # Run the server
-python -m teleapps.main
+python -m teleflow.main
 
 # Keep terminal open on error
 if [ $? -ne 0 ]; then
     echo ""
-    echo -e "${RED}Teleapps exited with an error.${NC}"
+    echo -e "${RED}TeleFlow exited with an error.${NC}"
     echo "Press any key to close..."
     read -n 1
 fi
