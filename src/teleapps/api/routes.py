@@ -107,6 +107,10 @@ async def get_app_config():
         "bulk_send_delay_seconds": config.bulk_send_delay_seconds,
         "bulk_send_max_per_job": config.bulk_send_max_per_job,
         "sync_interval_minutes": config.sync_interval_minutes,
+        # Advanced report settings
+        "report_message_limit": config.report_message_limit,
+        "report_text_truncation": config.report_text_truncation,
+        "llm_conversation_max_age_days": config.llm_conversation_max_age_days,
     }
 
 
@@ -134,6 +138,10 @@ class SaveConfigRequest(BaseModel):
     openrouter_api_key: str | None = None
     venice_api_key: str | None = None
     sync_interval_minutes: int | None = None
+    # Advanced report settings
+    report_message_limit: int | None = None
+    report_text_truncation: int | None = None
+    llm_conversation_max_age_days: int | None = None
 
 
 @router.post("/config/save")
@@ -172,6 +180,12 @@ async def save_app_config(request: SaveConfigRequest):
         updates["VENICE_API_KEY"] = request.venice_api_key
     if request.sync_interval_minutes is not None:
         updates["SYNC_INTERVAL_MINUTES"] = str(request.sync_interval_minutes)
+    if request.report_message_limit is not None:
+        updates["REPORT_MESSAGE_LIMIT"] = str(request.report_message_limit)
+    if request.report_text_truncation is not None:
+        updates["REPORT_TEXT_TRUNCATION"] = str(request.report_text_truncation)
+    if request.llm_conversation_max_age_days is not None:
+        updates["LLM_CONVERSATION_MAX_AGE_DAYS"] = str(request.llm_conversation_max_age_days)
     
     # Update existing lines or add new
     for line in existing_lines:

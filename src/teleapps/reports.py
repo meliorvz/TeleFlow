@@ -125,18 +125,26 @@ async def generate_report(
             owner_info=user_info
         )
         
-        # Get cached messages
+        # Get cached messages (limit configurable via report_message_limit)
         messages = db_session.execute(
             select(Message)
             .where(Message.conversation_uuid == conv.conversation_uuid)
             .order_by(Message.date.desc())
-            .limit(20)
+            .limit(config.report_message_limit)
         ).scalars().all()
+        
+        # Truncate text if configured (0 means no truncation)
+        def truncate_text(text: str | None) -> str:
+            if not text:
+                return ""
+            if config.report_text_truncation > 0:
+                return text[:config.report_text_truncation]
+            return text
         
         message_data = [
             {
                 "sender": msg.sender_name or "Unknown",
-                "text": msg.text[:500] if msg.text else "",
+                "text": truncate_text(msg.text),
                 "date": msg.date.isoformat() if msg.date else "",
             }
             for msg in messages
@@ -411,12 +419,12 @@ async def generate_simple_report(
         
         total_unread += conv.unread_count
         
-        # Get recent messages to check for mentions/replies
+        # Get recent messages to check for mentions/replies (limit configurable)
         messages = db_session.execute(
             select(Message)
             .where(Message.conversation_uuid == conv.conversation_uuid)
             .order_by(Message.date.desc())
-            .limit(20)
+            .limit(config.report_message_limit)
         ).scalars().all()
         
         # Calculate urgency based on simple rules
@@ -464,7 +472,9 @@ async def generate_simple_report(
         urgency_score = min(urgency_score, 100)
         
         # Generate summary from recent messages
-        summary_messages = [m.text[:100] for m in messages[:3] if m.text]
+        # Use truncation config for summary (cap at 200 chars total for readability)
+        trunc = min(config.report_text_truncation, 100) if config.report_text_truncation > 0 else 100
+        summary_messages = [m.text[:trunc] for m in messages[:3] if m.text]
         summary = "; ".join(summary_messages)[:200] if summary_messages else "No text messages"
         
         # Determine recommended action

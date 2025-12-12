@@ -44,6 +44,10 @@ class Config:
     # LLM conversation age cutoff (days)
     llm_conversation_max_age_days: int = 90
     
+    # Report generation settings
+    report_message_limit: int = 20  # Number of recent messages to include per conversation
+    report_text_truncation: int = 500  # Max characters per message (0 = no truncation)
+    
     # Auto-sync interval (minutes) - 0 to disable
     sync_interval_minutes: int = 10
     
@@ -154,6 +158,8 @@ def load_config(env_file: Path | None = None) -> Config:
         report_cadence=os.getenv("REPORT_CADENCE", "manual"),
         message_cache_limit=get_int("MESSAGE_CACHE_LIMIT", 50),
         llm_conversation_max_age_days=get_int("LLM_CONVERSATION_MAX_AGE_DAYS", 90),
+        report_message_limit=get_int("REPORT_MESSAGE_LIMIT", 20),
+        report_text_truncation=get_int("REPORT_TEXT_TRUNCATION", 500),
         sync_interval_minutes=get_int("SYNC_INTERVAL_MINUTES", 10),
         sync_max_participants_per_group=get_int("SYNC_MAX_PARTICIPANTS_PER_GROUP", 100),
         web_host=os.getenv("WEB_HOST", "127.0.0.1"),

@@ -18,7 +18,8 @@ import {
     Shield,
     Zap,
     AlertTriangle,
-    RefreshCw
+    RefreshCw,
+    Sliders
 } from 'lucide-react'
 import {
     clearMessageCache,
@@ -60,11 +61,28 @@ export function SettingsPage({ status, onRefresh }: SettingsPageProps) {
     const [savingSyncInterval, setSavingSyncInterval] = useState(false)
     const [syncIntervalSaveSuccess, setSyncIntervalSaveSuccess] = useState(false)
 
+    // Advanced report settings state
+    const [reportMessageLimit, setReportMessageLimit] = useState<number>(20)
+    const [reportTextTruncation, setReportTextTruncation] = useState<number>(500)
+    const [conversationMaxAge, setConversationMaxAge] = useState<number>(90)
+    const [savingAdvanced, setSavingAdvanced] = useState(false)
+    const [advancedSaveSuccess, setAdvancedSaveSuccess] = useState(false)
+
     // Load current config on mount
     useEffect(() => {
         getConfig().then((config: any) => {
             if (config.sync_interval_minutes !== undefined) {
                 setSyncInterval(config.sync_interval_minutes)
+            }
+            // Load advanced report settings
+            if (config.report_message_limit !== undefined) {
+                setReportMessageLimit(config.report_message_limit)
+            }
+            if (config.report_text_truncation !== undefined) {
+                setReportTextTruncation(config.report_text_truncation)
+            }
+            if (config.llm_conversation_max_age_days !== undefined) {
+                setConversationMaxAge(config.llm_conversation_max_age_days)
             }
         }).catch(() => { })
     }, [])
@@ -91,6 +109,24 @@ export function SettingsPage({ status, onRefresh }: SettingsPageProps) {
             console.error('Failed to save sync interval:', e)
         } finally {
             setSavingSyncInterval(false)
+        }
+    }
+
+    const handleSaveAdvancedSettings = async () => {
+        setSavingAdvanced(true)
+        setAdvancedSaveSuccess(false)
+        try {
+            await saveConfig({
+                report_message_limit: reportMessageLimit,
+                report_text_truncation: reportTextTruncation,
+                llm_conversation_max_age_days: conversationMaxAge,
+            } as any)
+            setAdvancedSaveSuccess(true)
+            setTimeout(() => setAdvancedSaveSuccess(false), 3000)
+        } catch (e) {
+            console.error('Failed to save advanced settings:', e)
+        } finally {
+            setSavingAdvanced(false)
         }
     }
 
@@ -376,6 +412,90 @@ export function SettingsPage({ status, onRefresh }: SettingsPageProps) {
                         Get API key from {selectedProvider === 'openrouter' ? 'OpenRouter' : 'Venice AI'}
                         <ExternalLink className="h-3 w-3" />
                     </a>
+                </CardContent>
+            </Card>
+
+            {/* Advanced Report Settings */}
+            <Card>
+                <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                        <Sliders className="h-5 w-5" />
+                        Advanced Report Settings
+                    </CardTitle>
+                    <CardDescription>
+                        Fine-tune how reports are generated. These settings affect AI analysis quality and performance.
+                    </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-6">
+                    {/* Message Recency */}
+                    <div className="space-y-2">
+                        <Label htmlFor="report-message-limit">Message Recency (per conversation)</Label>
+                        <p className="text-sm text-muted-foreground">
+                            Number of most recent messages to analyze from each conversation. Higher values provide more context but increase processing time and API costs.
+                        </p>
+                        <Input
+                            id="report-message-limit"
+                            type="number"
+                            min={5}
+                            max={100}
+                            value={reportMessageLimit}
+                            onChange={(e) => setReportMessageLimit(parseInt(e.target.value) || 20)}
+                            className="w-32"
+                        />
+                    </div>
+
+                    <Separator />
+
+                    {/* Text Truncation */}
+                    <div className="space-y-2">
+                        <Label htmlFor="report-text-truncation">Message Text Truncation (characters)</Label>
+                        <p className="text-sm text-muted-foreground">
+                            Maximum characters per message sent to the AI. Set to 0 for full message text. Lower values reduce costs but may lose important context.
+                        </p>
+                        <Input
+                            id="report-text-truncation"
+                            type="number"
+                            min={0}
+                            max={5000}
+                            value={reportTextTruncation}
+                            onChange={(e) => setReportTextTruncation(parseInt(e.target.value) || 0)}
+                            className="w-32"
+                        />
+                    </div>
+
+                    <Separator />
+
+                    {/* Conversation Age Filter */}
+                    <div className="space-y-2">
+                        <Label htmlFor="conversation-max-age">Conversation Age Limit (days)</Label>
+                        <p className="text-sm text-muted-foreground">
+                            Exclude conversations with no activity older than this many days. Helps focus reports on recent, relevant conversations.
+                        </p>
+                        <Input
+                            id="conversation-max-age"
+                            type="number"
+                            min={1}
+                            max={365}
+                            value={conversationMaxAge}
+                            onChange={(e) => setConversationMaxAge(parseInt(e.target.value) || 90)}
+                            className="w-32"
+                        />
+                    </div>
+
+                    <Separator />
+
+                    <div className="flex items-center gap-4">
+                        <Button onClick={handleSaveAdvancedSettings} disabled={savingAdvanced}>
+                            {savingAdvanced && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                            Save Advanced Settings
+                        </Button>
+                        {advancedSaveSuccess && (
+                            <p className="text-sm text-green-500 flex items-center gap-1">
+                                <Check className="h-4 w-4" />
+                                Saved successfully
+                            </p>
+                        )}
+                    </div>
                 </CardContent>
             </Card>
 
