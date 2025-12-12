@@ -103,6 +103,9 @@ async def get_app_config():
     return {
         "llm_enabled": config.llm_enabled,
         "llm_model": config.llm_model if config.llm_enabled else None,
+        "llm_provider": config.llm_provider,  # "openrouter", "venice", or "none"
+        "openrouter_configured": bool(config.openrouter_api_key),
+        "venice_configured": bool(config.venice_api_key),
         "report_cadence": config.report_cadence,
         "bulk_send_delay_seconds": config.bulk_send_delay_seconds,
         "bulk_send_max_per_job": config.bulk_send_max_per_job,

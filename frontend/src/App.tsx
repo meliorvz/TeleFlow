@@ -228,7 +228,7 @@ function App() {
 
         <div className="flex-1 overflow-hidden">
           <TabsContent value="dashboard" className="m-0 h-full">
-            <Dashboard status={status} />
+            <Dashboard status={status} activeJob={activeJob} />
           </TabsContent>
           <TabsContent value="conversations" className="m-0 h-full">
             <Conversations />

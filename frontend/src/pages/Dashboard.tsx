@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -7,18 +7,20 @@ import { Separator } from '@/components/ui/separator'
 import { Skeleton } from '@/components/ui/skeleton'
 import { FileText, AlertCircle, Clock, CheckCircle, Loader2 } from 'lucide-react'
 import { getLatestReport, generateReport } from '@/lib/api'
-import type { Status, Report, ReportItem } from '@/lib/types'
+import type { Status, Report, ReportItem, Job } from '@/lib/types'
 import { PageLayout } from '@/components/PageLayout'
 import { ReportItemCard } from '@/components/ReportItemCard'
 
 interface DashboardProps {
     status: Status | null
+    activeJob?: Job | null
 }
 
-export function Dashboard({ status }: DashboardProps) {
+export function Dashboard({ status, activeJob }: DashboardProps) {
     const [report, setReport] = useState<Report | null>(null)
     const [loading, setLoading] = useState(true)
     const [generating, setGenerating] = useState(false)
+    const lastJobId = useRef<string | null>(null)
 
     const loadReport = async () => {
         try {
@@ -34,6 +36,17 @@ export function Dashboard({ status }: DashboardProps) {
     useEffect(() => {
         loadReport()
     }, [])
+
+    // Reload report when a REPORT job completes
+    useEffect(() => {
+        if (activeJob?.type === 'report' && activeJob.status === 'completed') {
+            // Avoid reloading multiple times for the same job
+            if (lastJobId.current !== activeJob.id) {
+                lastJobId.current = activeJob.id
+                loadReport()
+            }
+        }
+    }, [activeJob])
 
     const handleGenerateReport = async () => {
         setGenerating(true)

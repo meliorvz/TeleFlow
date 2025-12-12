@@ -19,7 +19,8 @@ import {
     Zap,
     AlertTriangle,
     RefreshCw,
-    Sliders
+    Sliders,
+    Ban
 } from 'lucide-react'
 import {
     clearMessageCache,
@@ -36,11 +37,14 @@ interface SettingsPageProps {
     onRefresh: () => void
 }
 
-type LLMProvider = 'openrouter' | 'venice'
+type LLMProvider = 'openrouter' | 'venice' | 'none'
 
 export function SettingsPage({ status, onRefresh }: SettingsPageProps) {
     const [clearingCache, setClearingCache] = useState(false)
-    const [selectedProvider, setSelectedProvider] = useState<LLMProvider>('openrouter')
+    const [selectedProvider, setSelectedProvider] = useState<LLMProvider | null>(null)
+    const [activeProvider, setActiveProvider] = useState<LLMProvider>('none')
+    const [openrouterConfigured, setOpenrouterConfigured] = useState(false)
+    const [veniceConfigured, setVeniceConfigured] = useState(false)
     const [openrouterKey, setOpenrouterKey] = useState('')
     const [veniceKey, setVeniceKey] = useState('')
     const [saving, setSaving] = useState(false)
@@ -71,6 +75,15 @@ export function SettingsPage({ status, onRefresh }: SettingsPageProps) {
     // Load current config on mount
     useEffect(() => {
         getConfig().then((config: any) => {
+            // Load LLM provider settings
+            if (config.llm_provider) {
+                const provider = config.llm_provider as LLMProvider
+                setActiveProvider(provider)
+                setSelectedProvider(provider)
+            }
+            setOpenrouterConfigured(config.openrouter_configured || false)
+            setVeniceConfigured(config.venice_configured || false)
+
             if (config.sync_interval_minutes !== undefined) {
                 setSyncInterval(config.sync_interval_minutes)
             }
@@ -131,6 +144,7 @@ export function SettingsPage({ status, onRefresh }: SettingsPageProps) {
     }
 
     const handleSaveApiKey = async () => {
+        if (!selectedProvider || selectedProvider === 'none') return
         const apiKey = selectedProvider === 'openrouter' ? openrouterKey : veniceKey
         if (!apiKey.trim()) return
 
@@ -145,9 +159,30 @@ export function SettingsPage({ status, onRefresh }: SettingsPageProps) {
             setSaveSuccess(true)
             setOpenrouterKey('')
             setVeniceKey('')
+            // Update local state
+            if (selectedProvider === 'openrouter') {
+                setOpenrouterConfigured(true)
+            } else if (selectedProvider === 'venice') {
+                setVeniceConfigured(true)
+            }
+            setActiveProvider(selectedProvider)
             onRefresh()
         } catch (e) {
             console.error('Failed to save:', e)
+        } finally {
+            setSaving(false)
+        }
+    }
+
+    const handleSwitchProvider = async (provider: LLMProvider) => {
+        setSaving(true)
+        try {
+            await saveConfig({ llm_provider: provider })
+            setActiveProvider(provider)
+            setSelectedProvider(provider)
+            onRefresh()
+        } catch (e) {
+            console.error('Failed to switch provider:', e)
         } finally {
             setSaving(false)
         }
@@ -328,7 +363,7 @@ export function SettingsPage({ status, onRefresh }: SettingsPageProps) {
                     {/* Provider Selection */}
                     <div className="space-y-3">
                         <Label>Provider</Label>
-                        <div className="grid gap-3 sm:grid-cols-2">
+                        <div className="grid gap-3 sm:grid-cols-3">
                             {/* OpenRouter Option */}
                             <button
                                 type="button"
@@ -348,6 +383,34 @@ export function SettingsPage({ status, onRefresh }: SettingsPageProps) {
                                 <p className="text-xs text-muted-foreground mt-1">
                                     400+ models • Automatic failovers
                                 </p>
+                                {/* Status badge */}
+                                <div className="mt-2">
+                                    {activeProvider === 'openrouter' && openrouterConfigured ? (
+                                        <span className="inline-flex items-center gap-1 text-xs bg-green-500/20 text-green-500 px-2 py-0.5 rounded-full">
+                                            <Check className="h-3 w-3" />
+                                            In Use
+                                        </span>
+                                    ) : openrouterConfigured ? (
+                                        <span className="inline-flex items-center gap-1 text-xs bg-muted text-muted-foreground px-2 py-0.5 rounded-full">
+                                            Key saved
+                                        </span>
+                                    ) : null}
+                                </div>
+                                {/* Switch button for configured but not active */}
+                                {openrouterConfigured && activeProvider !== 'openrouter' && (
+                                    <Button
+                                        size="sm"
+                                        variant="outline"
+                                        className="mt-2 w-full text-xs"
+                                        onClick={(e) => {
+                                            e.stopPropagation()
+                                            handleSwitchProvider('openrouter')
+                                        }}
+                                        disabled={saving}
+                                    >
+                                        Use this
+                                    </Button>
+                                )}
                             </button>
 
                             {/* Venice Option */}
@@ -369,49 +432,112 @@ export function SettingsPage({ status, onRefresh }: SettingsPageProps) {
                                 <p className="text-xs text-muted-foreground mt-1">
                                     Zero logging • Maximum privacy
                                 </p>
+                                {/* Status badge */}
+                                <div className="mt-2">
+                                    {activeProvider === 'venice' && veniceConfigured ? (
+                                        <span className="inline-flex items-center gap-1 text-xs bg-green-500/20 text-green-500 px-2 py-0.5 rounded-full">
+                                            <Check className="h-3 w-3" />
+                                            In Use
+                                        </span>
+                                    ) : veniceConfigured ? (
+                                        <span className="inline-flex items-center gap-1 text-xs bg-muted text-muted-foreground px-2 py-0.5 rounded-full">
+                                            Key saved
+                                        </span>
+                                    ) : null}
+                                </div>
+                                {/* Switch button for configured but not active */}
+                                {veniceConfigured && activeProvider !== 'venice' && (
+                                    <Button
+                                        size="sm"
+                                        variant="outline"
+                                        className="mt-2 w-full text-xs"
+                                        onClick={(e) => {
+                                            e.stopPropagation()
+                                            handleSwitchProvider('venice')
+                                        }}
+                                        disabled={saving}
+                                    >
+                                        Use this
+                                    </Button>
+                                )}
+                            </button>
+
+                            {/* None Option */}
+                            <button
+                                type="button"
+                                onClick={() => handleSwitchProvider('none')}
+                                className={`rounded-lg border-2 p-3 text-left transition-all ${activeProvider === 'none'
+                                    ? 'border-primary bg-primary/5'
+                                    : 'border-muted hover:border-muted-foreground/50'
+                                    }`}
+                            >
+                                <div className="flex items-center gap-2">
+                                    <Ban className="h-4 w-4 text-muted-foreground" />
+                                    <span className="font-medium">None</span>
+                                    {activeProvider === 'none' && (
+                                        <Check className="h-4 w-4 text-primary ml-auto" />
+                                    )}
+                                </div>
+                                <p className="text-xs text-muted-foreground mt-1">
+                                    No AI • Maximum privacy
+                                </p>
+                                {/* Status badge */}
+                                <div className="mt-2">
+                                    {activeProvider === 'none' && (
+                                        <span className="inline-flex items-center gap-1 text-xs bg-muted text-muted-foreground px-2 py-0.5 rounded-full">
+                                            AI Disabled
+                                        </span>
+                                    )}
+                                </div>
                             </button>
                         </div>
                     </div>
 
-                    <Separator />
+                    {/* API Key Input - only show for OpenRouter or Venice */}
+                    {selectedProvider && selectedProvider !== 'none' && (
+                        <>
+                            <Separator />
+                            <div className="space-y-2">
+                                <Label>
+                                    {selectedProvider === 'openrouter' ? 'OpenRouter' : 'Venice AI'} API Key
+                                </Label>
+                                <div className="flex gap-2">
+                                    <Input
+                                        type="password"
+                                        placeholder={selectedProvider === 'openrouter' ? 'sk-or-...' : 'venice-...'}
+                                        value={currentApiKey}
+                                        onChange={(e) => setCurrentApiKey(e.target.value)}
+                                    />
+                                    <Button onClick={handleSaveApiKey} disabled={!currentApiKey.trim() || saving}>
+                                        {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                                        {(selectedProvider === 'openrouter' && openrouterConfigured) ||
+                                            (selectedProvider === 'venice' && veniceConfigured)
+                                            ? 'Update Key'
+                                            : 'Save'}
+                                    </Button>
+                                </div>
+                                {saveSuccess && (
+                                    <p className="text-sm text-green-500 flex items-center gap-1">
+                                        <Check className="h-4 w-4" />
+                                        Saved successfully
+                                    </p>
+                                )}
+                            </div>
 
-                    {/* API Key Input */}
-                    <div className="space-y-2">
-                        <Label>
-                            {selectedProvider === 'openrouter' ? 'OpenRouter' : 'Venice AI'} API Key
-                        </Label>
-                        <div className="flex gap-2">
-                            <Input
-                                type="password"
-                                placeholder={selectedProvider === 'openrouter' ? 'sk-or-...' : 'venice-...'}
-                                value={currentApiKey}
-                                onChange={(e) => setCurrentApiKey(e.target.value)}
-                            />
-                            <Button onClick={handleSaveApiKey} disabled={!currentApiKey.trim() || saving}>
-                                {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                                Save
-                            </Button>
-                        </div>
-                        {saveSuccess && (
-                            <p className="text-sm text-green-500 flex items-center gap-1">
-                                <Check className="h-4 w-4" />
-                                Saved successfully
-                            </p>
-                        )}
-                    </div>
-
-                    <a
-                        href={selectedProvider === 'openrouter'
-                            ? 'https://openrouter.ai/keys'
-                            : 'https://venice.ai/settings/api'
-                        }
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-sm text-primary flex items-center gap-1 hover:underline"
-                    >
-                        Get API key from {selectedProvider === 'openrouter' ? 'OpenRouter' : 'Venice AI'}
-                        <ExternalLink className="h-3 w-3" />
-                    </a>
+                            <a
+                                href={selectedProvider === 'openrouter'
+                                    ? 'https://openrouter.ai/keys'
+                                    : 'https://venice.ai/settings/api'
+                                }
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-sm text-primary flex items-center gap-1 hover:underline"
+                            >
+                                Get API key from {selectedProvider === 'openrouter' ? 'OpenRouter' : 'Venice AI'}
+                                <ExternalLink className="h-3 w-3" />
+                            </a>
+                        </>
+                    )}
                 </CardContent>
             </Card>
 

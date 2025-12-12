@@ -149,7 +149,7 @@ Copy `config.env.example` to `localdata/config.env` and customize:
 | `SYNC_INTERVAL_MINUTES` | `10` | Auto-sync interval (0 = disabled) |
 | `REPORT_MESSAGE_LIMIT` | `20` | Messages per conversation in reports |
 | `REPORT_TEXT_TRUNCATION` | `500` | Max chars per message (0 = none) |
-| `LLM_CONVERSATION_MAX_AGE_DAYS` | `90` | Exclude older conversations from reports |
+| `LLM_CONVERSATION_MAX_AGE_DAYS` | `30` | Exclude older conversations from reports |
 
 ### Bulk Send
 
