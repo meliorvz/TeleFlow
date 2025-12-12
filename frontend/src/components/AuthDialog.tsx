@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -26,6 +26,18 @@ export function AuthDialog({ open, onComplete }: AuthDialogProps) {
     const [password, setPassword] = useState('')
     const [loading, setLoading] = useState(false)
     const [error, setError] = useState('')
+
+    // Reset state when dialog closes
+    useEffect(() => {
+        if (!open) {
+            setStep('phone')
+            setPhone('')
+            setCode('')
+            setPassword('')
+            setError('')
+            setLoading(false)
+        }
+    }, [open])
 
     const handlePhoneSubmit = async (e: React.FormEvent) => {
         e.preventDefault()
@@ -81,8 +93,8 @@ export function AuthDialog({ open, onComplete }: AuthDialogProps) {
     }
 
     return (
-        <Dialog open={open} onOpenChange={() => { }}>
-            <DialogContent className="sm:max-w-md" onInteractOutside={(e) => e.preventDefault()}>
+        <Dialog open={open}>
+            <DialogContent className="sm:max-w-md" onInteractOutside={(e) => e.preventDefault()} onEscapeKeyDown={(e) => e.preventDefault()}>
                 <DialogHeader>
                     <DialogTitle>Connect to Telegram</DialogTitle>
                     <DialogDescription>

@@ -213,6 +213,16 @@ async def save_app_config(request: SaveConfigRequest):
     from .. import config as config_module
     importlib.reload(config_module)
     
+    # Also reset the Telegram client so it gets re-created with new credentials
+    global _tg_client
+    if _tg_client is not None:
+        try:
+            import asyncio
+            asyncio.create_task(_tg_client.disconnect())
+        except Exception:
+            pass
+        _tg_client = None
+    
     return {"status": "saved"}
 
 
