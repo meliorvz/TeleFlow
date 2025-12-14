@@ -1,12 +1,15 @@
 """LLM client for conversation analysis via OpenRouter or Venice AI."""
 
 import json
+import logging
 from dataclasses import dataclass
 from typing import Any
 
 import httpx
 
 from .config import Config, get_config
+
+logger = logging.getLogger(__name__)
 
 
 DEFAULT_SYSTEM_PROMPT = """You analyze Telegram conversations for urgency and priority.
@@ -133,30 +136,59 @@ class LLMClient:
             raise RuntimeError("LLM not configured. Set OPENROUTER_API_KEY or VENICE_API_KEY.")
         
         if not conversations:
+            logger.info("No conversations to analyze")
             return []
         
-        user_message = self._build_user_message(conversations, user_info)
+        logger.info(f"Analyzing batch of {len(conversations)} conversations")
+        logger.info(f"Using model: {self.model} at {self.base_url}")
         
-        async with httpx.AsyncClient(timeout=60.0) as client:
-            response = await client.post(
-                f"{self.base_url}/chat/completions",
-                headers={
-                    "Authorization": f"Bearer {self.api_key}",
-                    "Content-Type": "application/json",
-                },
-                json={
-                    "model": self.model,
-                    "messages": [
-                        {"role": "system", "content": self.system_prompt},
-                        {"role": "user", "content": user_message},
-                    ],
-                    "temperature": 0.3,
-                    "response_format": {"type": "json_object"},
-                },
-            )
+        user_message = self._build_user_message(conversations, user_info)
+        logger.debug(f"User message length: {len(user_message)} chars")
+        
+        # Use longer timeout for LLM calls - 600s to handle larger batches
+        timeout = httpx.Timeout(600.0, connect=30.0)
+        
+        try:
+            logger.info("Sending request to LLM API...")
             
-            response.raise_for_status()
-            data = response.json()
+            # Build request payload
+            payload = {
+                "model": self.model,
+                "messages": [
+                    {"role": "system", "content": self.system_prompt},
+                    {"role": "user", "content": user_message},
+                ],
+                "temperature": 0.3,
+            }
+            
+            # Only add response_format for providers that support it (not Venice)
+            # Venice AI doesn't support response_format parameter
+            if "venice" not in self.base_url.lower():
+                payload["response_format"] = {"type": "json_object"}
+            
+            async with httpx.AsyncClient(timeout=timeout) as client:
+                response = await client.post(
+                    f"{self.base_url}/chat/completions",
+                    headers={
+                        "Authorization": f"Bearer {self.api_key}",
+                        "Content-Type": "application/json",
+                    },
+                    json=payload,
+                )
+                
+                logger.info(f"LLM API response status: {response.status_code}")
+                response.raise_for_status()
+                data = response.json()
+                logger.info("Successfully received LLM response")
+        except httpx.TimeoutException as e:
+            logger.error(f"LLM API timeout after 180s: {e}")
+            raise RuntimeError(f"LLM API timeout: {e}")
+        except httpx.HTTPStatusError as e:
+            logger.error(f"LLM API HTTP error: {e.response.status_code} - {e.response.text}")
+            raise RuntimeError(f"LLM API error: {e.response.status_code}")
+        except Exception as e:
+            logger.error(f"LLM API unexpected error: {type(e).__name__}: {e}")
+            raise
         
         # Parse response
         content = data["choices"][0]["message"]["content"]

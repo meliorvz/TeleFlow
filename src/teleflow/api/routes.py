@@ -1047,11 +1047,14 @@ async def trigger_report_generation(background_tasks: BackgroundTasks):
     async def run_report():
         try:
             job.status = JobStatus.RUNNING
+            print(f"[REPORT] Starting report generation (LLM enabled: {config.llm_enabled})")
             client = await get_tg_client()
+            print(f"[REPORT] Got Telegram client")
             
             with get_session() as session:
                 if config.llm_enabled:
                     # Use LLM-based analysis
+                    print(f"[REPORT] Using LLM provider: {config.llm_provider}, model: {config.llm_model}")
                     llm = get_llm_client()
                     report = await generate_report(
                         client, session, llm,
@@ -1059,14 +1062,19 @@ async def trigger_report_generation(background_tasks: BackgroundTasks):
                     )
                 else:
                     # Use simple rule-based prioritization (privacy mode)
+                    print("[REPORT] Using simple rule-based prioritization")
                     from ..reports import generate_simple_report
                     report = await generate_simple_report(
                         client, session,
                         on_progress=lambda c, t, m: job_manager.update_progress(job.id, c, t, m)
                     )
             
+            print(f"[REPORT] Report generated successfully: {report.report_id}")
             job_manager.complete_job(job.id, {"report_id": report.report_id})
         except Exception as e:
+            import traceback
+            print(f"[REPORT] ERROR: {type(e).__name__}: {e}")
+            print(f"[REPORT] Traceback:\n{traceback.format_exc()}")
             job_manager.fail_job(job.id, str(e))
     
     background_tasks.add_task(run_report)

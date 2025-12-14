@@ -48,6 +48,11 @@ def create_app() -> FastAPI:
         @app.get("/{full_path:path}")
         async def catch_all(full_path: str):
             """Serve React app for all non-API routes."""
+            # Don't intercept API or WebSocket routes
+            if full_path.startswith("api/") or full_path.startswith("ws"):
+                from fastapi import HTTPException
+                raise HTTPException(status_code=404, detail="Not found")
+            
             # Check if file exists in static dir
             file_path = static_dir / full_path
             if file_path.exists() and file_path.is_file():
