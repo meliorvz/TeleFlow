@@ -161,10 +161,10 @@ class LLMClient:
                 "temperature": 0.3,
             }
             
-            # Only add response_format for providers that support it (not Venice)
-            # Venice AI doesn't support response_format parameter
-            if "venice" not in self.base_url.lower():
-                payload["response_format"] = {"type": "json_object"}
+            # Venice AI supports response_format for some models (e.g. Qwen 3).
+            # DeepSeek V3.2 does NOT support it and will error.
+            # We send it by default; user must choose a supported model.
+            payload["response_format"] = {"type": "json_object"}
             
             async with httpx.AsyncClient(timeout=timeout) as client:
                 response = await client.post(

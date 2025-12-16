@@ -381,7 +381,7 @@ export function SettingsPage({ status, onRefresh }: SettingsPageProps) {
                                     )}
                                 </div>
                                 <p className="text-xs text-muted-foreground mt-1">
-                                    400+ models • Automatic failovers
+                                    Model: DeepSeek v3.2 • Automatic failovers
                                 </p>
                                 {/* Status badge */}
                                 <div className="mt-2">
@@ -430,7 +430,7 @@ export function SettingsPage({ status, onRefresh }: SettingsPageProps) {
                                     )}
                                 </div>
                                 <p className="text-xs text-muted-foreground mt-1">
-                                    Zero logging • Maximum privacy
+                                    Model: GLM 4.6 • Zero logging • Maximum privacy
                                 </p>
                                 {/* Status badge */}
                                 <div className="mt-2">

@@ -32,7 +32,7 @@ class Config:
     # LLM (Venice AI - privacy-focused)
     venice_api_key: str = ""
     venice_base_url: str = "https://api.venice.ai/api/v1"
-    venice_model: str = "deepseek-v3.2"
+    venice_model: str = "zai-org-glm-4.6"
     llm_system_prompt: str | None = None
     
     # Report schedule
@@ -153,7 +153,7 @@ def load_config(env_file: Path | None = None) -> Config:
         openrouter_model=os.getenv("OPENROUTER_MODEL", "deepseek/deepseek-v3.2"),
         venice_api_key=os.getenv("VENICE_API_KEY", ""),
         venice_base_url=os.getenv("VENICE_BASE_URL", "https://api.venice.ai/api/v1"),
-        venice_model=os.getenv("VENICE_MODEL", "deepseek-v3.2"),
+        venice_model=os.getenv("VENICE_MODEL", "zai-org-glm-4.6"),
         llm_system_prompt=os.getenv("LLM_SYSTEM_PROMPT"),
         report_cadence=os.getenv("REPORT_CADENCE", "manual"),
         message_cache_limit=get_int("MESSAGE_CACHE_LIMIT", 50),

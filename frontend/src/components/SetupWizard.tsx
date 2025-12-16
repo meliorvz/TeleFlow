@@ -144,7 +144,7 @@ export function SetupWizard({ onComplete }: SetupWizardProps) {
                                         )}
                                     </div>
                                     <p className="text-xs text-muted-foreground">
-                                        Most reliable • 400+ models • Automatic failovers
+                                        Model: DeepSeek v3.2 • 400+ models
                                     </p>
                                 </button>
 
@@ -165,7 +165,7 @@ export function SetupWizard({ onComplete }: SetupWizardProps) {
                                         )}
                                     </div>
                                     <p className="text-xs text-muted-foreground">
-                                        Maximum privacy • Zero logging • For sensitive work
+                                        Model: GLM 4.6 • Zero logging • Maximum privacy
                                     </p>
                                 </button>
                             </div>
